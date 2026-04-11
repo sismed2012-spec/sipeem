@@ -1,4 +1,4 @@
-export type Rol = "operador" | "analista" | "director";
+export type Rol = "operador" | "admin" | "director";
 
 export interface Usuario {
   id: string;
@@ -15,6 +15,20 @@ export interface Municipio {
   sec_inicio: number;
   secciones: number;
   regidores: number;
+  distrito: string | null;
+  region: string | null;
+  estatus: "activo" | "inactivo";
+  created_at?: string;
+}
+
+export interface Partido {
+  id: number;
+  nombre: string;
+  siglas: string;
+  color: string;
+  estatus: "activo" | "inactivo";
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface Alcalde {
@@ -38,14 +52,37 @@ export interface DatosElectorales {
   sec_ganadas: number;
 }
 
+// Historial Electoral Normalizado
 export interface HistorialElectoral {
-  id: number;
+  id?: number;
   municipio_id: number;
   anio: number;
-  partido_ganador: string;
+  partido_ganador_id: number;
+  votos_ganador: number;
+  porcentaje_ganador: number;
+  fuente?: string | null;
+  notas?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface HistorialResultado {
+  id?: number;
+  historial_id: number;
+  partido_id: number;
   votos: number;
   porcentaje: number;
-  desglose: { p: string; v: number }[];
+  posicion: number;
+  created_at?: string;
+}
+
+// Interfaz para vistas y listados con Joins
+export interface HistorialElectoralDetalle extends HistorialElectoral {
+  municipio?: {
+    nombre: string;
+  };
+  partido_ganador?: Partido;
+  resultados?: (HistorialResultado & { partido: Partido })[];
 }
 
 export interface Termometros {
@@ -107,8 +144,18 @@ export interface MunicipioDashboard {
   municipio: Municipio;
   alcalde: Alcalde | null;
   datos: DatosElectorales | null;
-  historial: HistorialElectoral[];
+  historial: HistorialElectoralDetalle[];
   termometros: Termometros | null;
   escenarios: Escenarios | null;
   comite: ComiteMunicipal | null;
+}
+
+export interface Configuracion {
+  id: number;
+  clave: string;
+  valor: string;
+  categoria: string;
+  descripcion: string | null;
+  created_at?: string;
+  updated_at?: string;
 }
