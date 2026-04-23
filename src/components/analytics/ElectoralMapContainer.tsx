@@ -8,37 +8,27 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card } from "@/components/ui/card";
 import { Loader2, Calendar, Map as MapIcon, Info } from "lucide-react";
 
-export function ElectoralMapContainer({ isAnalytic }: { isAnalytic: boolean }) {
-  const [geoData, setGeoData] = useState<any>(null);
+// geoData se pre-carga en el Server Component padre para eliminar el fetch
+// client-side y reducir el número de round-trips al renderizar el mapa.
+export function ElectoralMapContainer({
+  isAnalytic,
+  geoData,
+}: {
+  isAnalytic: boolean;
+  geoData: any;
+}) {
   const [analytics, setAnalytics] = useState<MapAnalyticsDTO[]>([]);
   const [availableYears, setAvailableYears] = useState<number[]>([]);
   const [selectedYear, setSelectedYear] = useState<string>("latest");
-  const [loading, setLoading] = useState(true);
   const [dataLoading, setDataLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // 1. Cargar GeoJSON y Años disponibles solo una vez
+  // Cargar años disponibles solo una vez
   useEffect(() => {
-    async function init() {
-      try {
-        const [geoRes, years] = await Promise.all([
-          fetch("/maps/edomex_municipios_wgs84.geojson"),
-          isAnalytic ? getAvailableHistorialYears() : Promise.resolve([])
-        ]);
-
-        if (!geoRes.ok) throw new Error("No se pudo cargar la cartografía base (GeoJSON)");
-        
-        const geoJson = await geoRes.json();
-        setGeoData(geoJson);
-        setAvailableYears(years);
-      } catch (err: any) {
-        console.error(err);
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    }
-    init();
+    if (!isAnalytic) return;
+    getAvailableHistorialYears()
+      .then(setAvailableYears)
+      .catch((err) => setError(err.message));
   }, [isAnalytic]);
 
   // 2. Cargar Capa Analítica cada vez que cambie el año
@@ -58,20 +48,6 @@ export function ElectoralMapContainer({ isAnalytic }: { isAnalytic: boolean }) {
     }
     loadData();
   }, [selectedYear, isAnalytic]);
-
-  if (loading) {
-    return (
-      <div className="w-full h-full flex flex-col items-center justify-center bg-white/50 backdrop-blur-sm">
-        <div className="relative">
-          <Loader2 className="w-12 h-12 animate-spin text-indigo-500" />
-          <div className="absolute inset-0 w-12 h-12 blur-xl bg-indigo-500/20 animate-pulse" />
-        </div>
-        <p className="mt-4 text-slate-500 font-black uppercase tracking-[0.3em] text-[10px] animate-pulse">
-           Iniciando Motor Geográfico
-        </p>
-      </div>
-    );
-  }
 
   if (error) {
     return (
@@ -98,7 +74,7 @@ export function ElectoralMapContainer({ isAnalytic }: { isAnalytic: boolean }) {
                 <Calendar className="w-3 h-3 text-indigo-500" />
                 Ciclo Electoral
               </label>
-              <Select value={selectedYear} onValueChange={setSelectedYear}>
+              <Select value={selectedYear} onValueChange={(v) => setSelectedYear(v ?? "")}>
                 <SelectTrigger className="w-full h-12 bg-slate-50 border-slate-200 font-bold text-slate-800 transition-all hover:bg-slate-100 focus:ring-indigo-500">
                   <SelectValue />
                 </SelectTrigger>

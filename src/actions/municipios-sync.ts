@@ -1,11 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getUsuarioActual } from "./auth";
 import { Municipio } from "@/lib/types";
-import * as fs from "fs";
-import * as path from "path";
 
 async function assertAdmin() {
   const usuario = await getUsuarioActual();
@@ -34,14 +33,22 @@ export async function syncMunicipiosFromGeoJSON() {
   await assertAdmin();
   const service = createServiceClient();
   
-  // 1. Cargar el GeoJSON (Asset de Verdad)
-  const geojsonPath = path.resolve(process.cwd(), "public/maps/edomex_municipios_wgs84.geojson");
-  
-  if (!fs.existsSync(geojsonPath)) {
-    throw new Error(`No se encontró el archivo GeoJSON en: ${geojsonPath}`);
+  // 1. Cargar el GeoJSON desde la ruta pública.
+  // Usar fetch en lugar de fs.readFileSync para compatibilidad con todos los
+  // entornos de ejecución de Vercel (Serverless y Edge) sin depender del
+  // sistema de archivos del runtime.
+  const host = (await headers()).get("host") ?? "localhost:3000";
+  const proto = process.env.NODE_ENV === "production" ? "https" : "http";
+  const geoRes = await fetch(`${proto}://${host}/maps/edomex_municipios_wgs84.geojson`);
+
+  if (!geoRes.ok) {
+    throw new Error(
+      `No se pudo cargar la cartografía base (HTTP ${geoRes.status}). ` +
+      `Verifique que public/maps/edomex_municipios_wgs84.geojson exista.`
+    );
   }
 
-  const geojson = JSON.parse(fs.readFileSync(geojsonPath, "utf-8"));
+  const geojson = await geoRes.json();
   
   // 2. Obtener catálogo actual de la DB
   const { data: currentMuns, error: fetchError } = await service

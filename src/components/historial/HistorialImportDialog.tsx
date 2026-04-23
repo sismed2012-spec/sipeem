@@ -82,11 +82,18 @@ export default function HistorialImportDialog() {
 
   return (
     <Dialog open={open} onOpenChange={(val) => { setOpen(val); if (!val) reset(); }}>
-      <DialogTrigger asChild>
-        <Button variant="outline" className="rounded-xl border-slate-200 font-bold hover:bg-slate-50">
-          <FileUp className="mr-2 h-4 w-4" /> Importar CSV
-        </Button>
+      {/* 
+         MANDATORY FIX: Use 'render' instead of 'asChild' for Base UI compatibility. 
+         This avoids nesting <button> inside <button> and prevents hydration errors.
+      */}
+      <DialogTrigger 
+        render={
+          <Button variant="outline" className="rounded-xl border-slate-200 font-bold hover:bg-slate-50" />
+        }
+      >
+        <FileUp className="mr-2 h-4 w-4" /> Importar CSV
       </DialogTrigger>
+      
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col p-0 rounded-2xl border-none shadow-2xl">
         <DialogHeader className="p-6 bg-slate-50 border-b border-slate-100">
           <DialogTitle className="text-2xl font-black text-slate-900 tracking-tighter uppercase">

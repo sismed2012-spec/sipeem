@@ -2,6 +2,7 @@ import { getUsuarioActual } from "@/actions/auth";
 import { getHistorialList } from "@/actions/historial";
 import { getMunicipios } from "@/actions/municipios";
 import { getPartidos } from "@/actions/partidos";
+import { PaginationBar } from "@/components/ui/PaginationBar";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import {
@@ -30,6 +31,7 @@ type PageProps = {
     municipioId?: string;
     anio?: string;
     partidoId?: string;
+    page?: string;
   }>;
 };
 
@@ -42,19 +44,21 @@ export default async function HistorialPage({ searchParams }: PageProps) {
   const params = await searchParams;
   
   // Data Fetching
-  const [historial, municipios, partidos] = await Promise.all([
+  const [result, municipios, partidos] = await Promise.all([
     getHistorialList({
       search: params.q,
       municipioId: params.municipioId ? parseInt(params.municipioId) : undefined,
       anio: params.anio ? parseInt(params.anio) : undefined,
       partidoGanadorId: params.partidoId ? parseInt(params.partidoId) : undefined,
+      page: params.page ? parseInt(params.page) : 1,
     }),
     getMunicipios(),
     getPartidos()
   ]);
 
-  const total = historial.length;
-  const uniqueYears = Array.from(new Set(historial.map(h => h.anio))).sort((a, b) => b - a);
+  const { records: historial, total, page, pageSize, totalPages } = result;
+  // First record is always the most recent (query is ordered by anio DESC)
+  const latestYear = historial[0]?.anio ?? null;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700">
@@ -90,7 +94,7 @@ export default async function HistorialPage({ searchParams }: PageProps) {
             <CardTitle className="text-xs font-bold uppercase tracking-widest text-slate-500">Eventos Totales</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-black text-slate-900">{total}</div>
+            <div className="text-3xl font-black text-slate-900">{total.toLocaleString()}</div>
             <p className="text-xs text-slate-500 mt-1 italic">Procesos validados</p>
           </CardContent>
         </Card>
@@ -99,19 +103,19 @@ export default async function HistorialPage({ searchParams }: PageProps) {
             <CardTitle className="text-xs font-bold uppercase tracking-widest text-slate-500">Última Actualización</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-black text-emerald-600">{uniqueYears[0] || '—'}</div>
+            <div className="text-3xl font-black text-emerald-600">{latestYear ?? '—'}</div>
             <p className="text-xs text-slate-500 mt-1 italic">Datos más recientes</p>
           </CardContent>
         </Card>
         <Card className="border-slate-200 shadow-sm border-l-4 border-l-blue-500">
           <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-bold uppercase tracking-widest text-slate-500">Cobertura Municipal</CardTitle>
+            <CardTitle className="text-xs font-bold uppercase tracking-widest text-slate-500">Página</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-black text-blue-600">
-              {new Set(historial.map(h => h.municipio_id)).size}
+              {page}<span className="text-base text-slate-400 font-bold"> / {totalPages}</span>
             </div>
-            <p className="text-xs text-slate-500 mt-1 italic">Municipios con historial</p>
+            <p className="text-xs text-slate-500 mt-1 italic">{pageSize} registros por página</p>
           </CardContent>
         </Card>
       </div>
@@ -198,6 +202,14 @@ export default async function HistorialPage({ searchParams }: PageProps) {
             </TableBody>
           </Table>
         )}
+        <PaginationBar
+          page={page}
+          totalPages={totalPages}
+          totalRecords={total}
+          pageSize={pageSize}
+          basePath="/admin/historial"
+          searchParams={params}
+        />
       </Card>
     </div>
   );

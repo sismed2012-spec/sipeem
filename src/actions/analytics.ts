@@ -68,7 +68,7 @@ export type MunicipioAnalyticsDTO = {
 
 export type MapAnalyticsDTO = {
   municipio_id: number;
-  geo_municipio_id: number | null; // ID oficial del mapa (INEGI/Edomex)
+  geo_municipio_id: number | null; 
   municipio_nombre: string;
   partido_ganador_id: number | null;
   partido_siglas: string | null;
@@ -146,9 +146,9 @@ export async function getHistorialAnalytics(): Promise<HistorialAnalyticsDTO> {
     const current = munData.get(h.municipio_id) || {
       id: h.municipio_id,
       nombre: mun?.nombre || "N/A",
-      margins: [],
-      winners: [],
-      electionYears: []
+      margins: [] as number[],
+      winners: [] as number[],
+      electionYears: [] as number[],
     };
     current.winners.push(h.partido_ganador_id!);
     current.electionYears.push(h.anio);
@@ -158,11 +158,17 @@ export async function getHistorialAnalytics(): Promise<HistorialAnalyticsDTO> {
       orphans++;
       if (samples.length < 5) samples.push({ id: h.id, municipio: current.nombre, anio: h.anio, issue: "Sin desglose relacional" });
     } else {
-      if (detail.length >= 2) {
-        current.margins.push(detail[0].votos - detail[1].votos);
+      // MANDATORY FIX: Sort and calculate non-negative margin
+      const sortedDetail = [...detail].sort((a, b) => (b.votos || 0) - (a.votos || 0));
+      
+      if (sortedDetail.length >= 2) {
+        // Margin is always first - second place
+        const marginValue = Math.max(0, (sortedDetail[0].votos || 0) - (sortedDetail[1].votos || 0));
+        current.margins.push(marginValue);
       }
+
       const winnerInResults = detail.find(d => d.partido_id === h.partido_ganador_id);
-      const totalDetailVotes = detail.reduce((acc, curr) => acc + curr.votos, 0);
+      const totalDetailVotes = detail.reduce((acc, curr) => acc + (curr.votos || 0), 0);
 
       if (totalDetailVotes === 0) {
         zeroDetail++;
@@ -258,12 +264,17 @@ export async function getMunicipioHistorialAnalytics(municipioId: number): Promi
 
   const timeline = historial.map((h, i) => {
     const rowDetails = detailsMap.get(h.id) || [];
+    
+    // MANDATORY FIX: Sort and calculate non-negative margin
+    const sortedDetails = [...rowDetails].sort((a, b) => (b.votos || 0) - (a.votos || 0));
+    
     let margin = 0;
-    if (rowDetails.length >= 2) {
-      margin = rowDetails[0].votos - rowDetails[1].votos;
+    if (sortedDetails.length >= 2) {
+      margin = Math.max(0, (sortedDetails[0].votos || 0) - (sortedDetails[1].votos || 0));
       totalMargin += margin;
       marginCount++;
     }
+    
     if (i > 0 && h.partido_ganador_id !== historial[i - 1].partido_ganador_id) totalChanges++;
 
     return {
@@ -275,7 +286,7 @@ export async function getMunicipioHistorialAnalytics(municipioId: number): Promi
       votos: h.votos_ganador,
       porcentaje: h.porcentaje_ganador,
       margin,
-      topParties: rowDetails.slice(0, 3).map(d => ({ siglas: (d.partidos as any).siglas, votes: d.votos }))
+      topParties: sortedDetails.slice(0, 3).map(d => ({ siglas: (d.partidos as any).siglas, votes: d.votos || 0 }))
     };
   });
 
@@ -354,8 +365,8 @@ export async function getHistorialMapAnalytics(year?: number): Promise<MapAnalyt
     const mun = h.municipios as any;
     const partido = h.partidos as any;
     const resultados = (h.resultados as any[]) || [];
-    const sortedRes = [...resultados].sort((a, b) => b.votos - a.votos);
-    const margin = sortedRes.length > 1 ? sortedRes[0].votos - sortedRes[1].votos : h.votos_ganador;
+    const sortedRes = [...resultados].sort((a, b) => (b.votos || 0) - (a.votos || 0));
+    const margin = sortedRes.length > 1 ? Math.max(0, (sortedRes[0].votos || 0) - (sortedRes[1].votos || 0)) : 0;
 
     mapData.push({
       municipio_id: h.municipio_id,

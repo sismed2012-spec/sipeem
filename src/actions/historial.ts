@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getUsuarioActual } from "./auth";
+import { logAction } from "@/lib/audit";
 import {
   HistorialElectoral,
   HistorialResultado,
@@ -20,20 +21,33 @@ async function assertAdmin() {
   }
 }
 
+const HISTORIAL_PAGE_SIZE = 20;
+
 type GetHistorialListFilters = {
   municipioId?: number;
   anio?: number;
   partidoGanadorId?: number;
   search?: string;
+  page?: number;
+};
+
+export type HistorialListResult = {
+  records: HistorialElectoralDetalle[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
 };
 
 export async function getHistorialList(
   filters: GetHistorialListFilters = {}
-) {
+): Promise<HistorialListResult> {
   const usuario = await getUsuarioActual();
   if (!usuario) throw new Error("No autenticado");
 
   const service = createServiceClient();
+  const page = Math.max(1, filters.page ?? 1);
+  const pageSize = HISTORIAL_PAGE_SIZE;
 
   let query = service
     .from("historial_electoral")
@@ -41,7 +55,7 @@ export async function getHistorialList(
       *,
       municipio:municipios(id, nombre),
       partido_ganador_data:partidos(*)
-    `)
+    `, { count: "exact" })
     .order("anio", { ascending: false })
     .order("municipio_id", { ascending: true });
 
@@ -57,8 +71,31 @@ export async function getHistorialList(
     query = query.eq("partido_ganador_id", filters.partidoGanadorId);
   }
 
-  const { data, error } = await query;
+  // Determine search strategy before executing the query.
+  const searchTerm = filters.search?.trim();
+  let yearHandledInDb = false;
+  let textSearchActive = false;
 
+  if (searchTerm && !filters.anio) {
+    const maybeYear = parseInt(searchTerm, 10);
+    if (!isNaN(maybeYear) && String(maybeYear) === searchTerm) {
+      // 4-digit year: resolve entirely in DB, no in-memory pass needed.
+      query = query.eq("anio", maybeYear);
+      yearHandledInDb = true;
+    } else {
+      // Partido / municipio text search: handled in-memory after fetching all matches.
+      // DB-level .range() is skipped so no results are cut before the filter runs.
+      textSearchActive = true;
+    }
+  }
+
+  // Apply DB-level pagination only when all filtering is DB-native.
+  if (!textSearchActive) {
+    const from = (page - 1) * pageSize;
+    query = query.range(from, from + pageSize - 1);
+  }
+
+  const { data, error, count } = await query;
   if (error) throw new Error(error.message);
 
   let results = (data ?? []).map((row: any) => ({
@@ -66,24 +103,33 @@ export async function getHistorialList(
     partido_ganador: row.partido_ganador_data,
   })) as HistorialElectoralDetalle[];
 
-  if (filters.search?.trim()) {
-    const s = filters.search.trim().toLowerCase();
-
-    results = results.filter((h) => {
-      const municipioNombre = h.municipio?.nombre?.toLowerCase() ?? "";
-      const partidoNombre = h.partido_ganador?.nombre?.toLowerCase() ?? "";
-      const partidoSiglas = h.partido_ganador?.siglas?.toLowerCase() ?? "";
-
-      return (
-        municipioNombre.includes(s) ||
-        partidoNombre.includes(s) ||
-        partidoSiglas.includes(s) ||
-        String(h.anio).includes(s)
-      );
-    });
+  // In-memory filter + local pagination for partido / municipio text searches.
+  if (textSearchActive && searchTerm) {
+    const s = searchTerm.toLowerCase();
+    results = results.filter((h) =>
+      (h.municipio?.nombre?.toLowerCase() ?? "").includes(s) ||
+      (h.partido_ganador?.nombre?.toLowerCase() ?? "").includes(s) ||
+      (h.partido_ganador?.siglas?.toLowerCase() ?? "").includes(s)
+    );
+    const total = results.length;
+    const from = (page - 1) * pageSize;
+    return {
+      records: results.slice(from, from + pageSize),
+      total,
+      page,
+      pageSize,
+      totalPages: Math.ceil(total / pageSize),
+    };
   }
 
-  return results;
+  const total = count ?? 0;
+  return {
+    records: results,
+    total,
+    page,
+    pageSize,
+    totalPages: Math.ceil(total / pageSize),
+  };
 }
 
 export async function getHistorialById(id: number | string) {
@@ -235,6 +281,13 @@ export async function upsertHistorialManual(
   if (mainData.id) {
     revalidatePath(`/admin/historial/${mainData.id}`);
   }
+
+  await logAction({
+    action: "upsert",
+    entity: "historial",
+    entityId: mainData.municipio_id,
+    details: { anio: mainData.anio },
+  });
 
   return { success: true, id: historialId };
 }

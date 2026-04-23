@@ -12,15 +12,18 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { 
-  Trophy, 
-  Map as MapIcon, 
-  Calendar, 
-  Activity, 
+import {
+  Trophy,
+  Map as MapIcon,
+  Calendar,
+  Activity,
   AlertTriangle,
+  AlertOctagon,
   ChevronLeft,
   ArrowRight
 } from "lucide-react";
+import AnomaliasDashboard from "@/components/analytics/AnomaliasDashboard";
+import { Suspense } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -96,7 +99,7 @@ export default async function HistorialDashboardPage() {
 
         <Card className="border-slate-200 shadow-xl rounded-2xl overflow-hidden bg-white">
           <CardHeader className="bg-slate-50/50 border-b border-slate-100 p-6">
-            <CardTitle className="text-lg font-black uppercase tracking-tight">Cronología Eelectoral</CardTitle>
+            <CardTitle className="text-lg font-black uppercase tracking-tight">Cronología Electoral</CardTitle>
             <CardDescription className="text-xs font-bold uppercase tracking-widest text-slate-400">Volumen de datos por año</CardDescription>
           </CardHeader>
           <CardContent className="p-6">
@@ -186,6 +189,15 @@ export default async function HistorialDashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      <section className="space-y-4">
+        <h2 className="text-xs font-black text-slate-400 uppercase tracking-[0.25em] flex items-center gap-2">
+          <AlertOctagon className="w-3.5 h-3.5 text-amber-500" /> Detección de Anomalías
+        </h2>
+        <Suspense fallback={<p className="text-sm text-slate-400">Analizando historial...</p>}>
+          <AnomaliasDashboard />
+        </Suspense>
+      </section>
 
       <Card className="border-slate-200 bg-slate-50/50 overflow-hidden rounded-2xl shadow-inner border-t-4 border-t-amber-500">
         <CardHeader className="p-6 bg-white/50 border-b border-slate-200">

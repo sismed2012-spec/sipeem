@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Gauge, ClipboardList, Key, Smartphone } from "lucide-react";
 
 type SidebarNavProps = {
   esAdmin: boolean;
@@ -23,11 +24,16 @@ export default function SidebarNav({ esAdmin }: SidebarNavProps) {
   const pathname = usePathname();
 
   const isMapa = pathname === "/mapa";
+  const isCampo = pathname.startsWith("/campo");
   const isAdmin = pathname === "/admin";
   const isImportacion = pathname === "/admin/importacion";
   const isUsuarios = pathname.startsWith("/admin/usuarios");
+  const isEstrategia = pathname.startsWith("/admin/estrategia-municipal");
   const isCatalogos = pathname.startsWith("/admin/catalogos");
   const isHistorial = pathname.startsWith("/admin/historial");
+  const isSituacion = pathname.startsWith("/admin/situacion");
+  const isAuditoria = pathname.startsWith("/admin/auditoria");
+  const isApiKeys = pathname.startsWith("/admin/api-keys");
 
   return (
     <nav className="flex-1 px-4 py-6">
@@ -41,8 +47,33 @@ export default function SidebarNav({ esAdmin }: SidebarNavProps) {
           Inicio / Mapa
         </Link>
 
+        <Link href="/campo" className={itemClass(isCampo)}>
+          <span className={iconClass(isCampo, "bg-emerald-600/20 text-emerald-300")}>
+            <Smartphone className="h-4 w-4" />
+          </span>
+          Modo Campo
+        </Link>
+
         {esAdmin && (
           <>
+            <Link href="/admin/situacion" className={itemClass(isSituacion)}>
+              <span
+                className={iconClass(isSituacion, "bg-purple-600/20 text-purple-300")}
+              >
+                <Gauge className="h-4 w-4" />
+              </span>
+              Sala de Situación
+            </Link>
+
+            <Link href="/admin/auditoria" className={itemClass(isAuditoria)}>
+              <span
+                className={iconClass(isAuditoria, "bg-orange-600/20 text-orange-300")}
+              >
+                <ClipboardList className="h-4 w-4" />
+              </span>
+              Auditoría
+            </Link>
+
             <Link href="/admin" className={itemClass(isAdmin)}>
               <span
                 className={iconClass(isAdmin, "bg-blue-600/20 text-blue-300")}
@@ -50,6 +81,15 @@ export default function SidebarNav({ esAdmin }: SidebarNavProps) {
                 A
               </span>
               Panel administrativo
+            </Link>
+
+            <Link href="/admin/estrategia-municipal" className={itemClass(isEstrategia)}>
+              <span
+                className={iconClass(isEstrategia, "bg-indigo-600/20 text-indigo-300")}
+              >
+                E
+              </span>
+              Estrategia municipal
             </Link>
 
             <Link
@@ -95,6 +135,13 @@ export default function SidebarNav({ esAdmin }: SidebarNavProps) {
                 I
               </span>
               Importación electoral
+            </Link>
+
+            <Link href="/admin/api-keys" className={itemClass(isApiKeys)}>
+              <span className={iconClass(isApiKeys, "bg-violet-600/20 text-violet-300")}>
+                <Key className="h-4 w-4" />
+              </span>
+              API Keys
             </Link>
           </>
         )}

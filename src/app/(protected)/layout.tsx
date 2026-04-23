@@ -1,5 +1,6 @@
 import { getUsuarioActual, logout } from "@/actions/auth";
 import SidebarNav from "@/components/layout/SidebarNav";
+import { MobileNav } from "@/components/layout/MobileNav";
 import { redirect } from "next/navigation";
 
 type ProtectedLayoutProps = {
@@ -90,14 +91,11 @@ export default async function ProtectedLayout({
                   </p>
                 </div>
 
-                <form action={logout} className="lg:hidden">
-                  <button
-                    type="submit"
-                    className="rounded-xl bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-700"
-                  >
-                    Salir
-                  </button>
-                </form>
+                <MobileNav
+                  esAdmin={esAdmin}
+                  nombreUsuario={usuario.nombre ?? usuario.email ?? "Usuario"}
+                  rolLabel={getRolLabel(usuario.rol)}
+                />
               </div>
             </div>
           </header>

@@ -1,6 +1,6 @@
 "use server";
 
-import { read as xlsxRead, utils as xlsxUtils } from "xlsx";
+import { read as xlsxRead, utils as xlsxUtils } from "@e965/xlsx";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { revalidatePath } from "next/cache";
@@ -285,7 +285,11 @@ export async function commitHistorialImport(rows: HistorialPreviewRow[]): Promis
 
       // Insert new results
       if (row.desglose.length > 0) {
-        const payloadDetails = row.desglose
+        // Sort descending by votes so posicion=1 always goes to the leading party.
+        const sortedDesglose = [...row.desglose].sort((a, b) => (b.v || 0) - (a.v || 0));
+        const totalVotos = sortedDesglose.reduce((sum, d) => sum + (d.v || 0), 0);
+
+        const payloadDetails = sortedDesglose
           .map((d, index) => {
             const pId = partyMap.get(d.p.toUpperCase());
             if (!pId) return null;
@@ -293,8 +297,10 @@ export async function commitHistorialImport(rows: HistorialPreviewRow[]): Promis
               historial_id: dbId,
               partido_id: pId,
               votos: d.v,
-              porcentaje: 0, 
-              posicion: index + 1
+              porcentaje: totalVotos > 0
+                ? parseFloat(((d.v / totalVotos) * 100).toFixed(2))
+                : 0,
+              posicion: index + 1,
             };
           })
           .filter(Boolean);

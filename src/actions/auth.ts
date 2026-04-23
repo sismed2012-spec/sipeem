@@ -1,5 +1,6 @@
 "use server";
 
+import { cache } from "react";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -30,7 +31,10 @@ export async function logout() {
   redirect("/login");
 }
 
-export async function getUsuarioActual() {
+// Cached per-request: deduplicates DB calls within a single React render tree.
+// Multiple Server Components calling getUsuarioActual() in the same request
+// will share this result instead of each issuing a separate query.
+const _getUsuarioActualCached = cache(async () => {
   const supabase = await createClient();
   const {
     data: { user },
@@ -45,4 +49,8 @@ export async function getUsuarioActual() {
     .single();
 
   return usuario;
+});
+
+export async function getUsuarioActual() {
+  return _getUsuarioActualCached();
 }

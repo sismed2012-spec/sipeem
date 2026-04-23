@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { randomBytes } from "crypto";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getUsuarioActual } from "./auth";
+import { logAction } from "@/lib/audit";
 
 /**
  * Ensures only authorized personnel (director/admin) can access these actions.
@@ -15,6 +16,8 @@ async function assertAdmin() {
   if (!admin || !allowedRoles.includes(admin.rol)) {
     throw new Error("Acceso denegado: se requieren privilegios directivos o administrativos");
   }
+
+  return admin;
 }
 
 /**
@@ -97,6 +100,7 @@ export async function createUsuario(data: { nombre: string; email: string; rol: 
   }
 
   revalidatePath("/admin/usuarios");
+  await logAction({ action: "create", entity: "usuario", entityId: userId, details: { email: data.email, rol: data.rol } });
   return { success: true, password: tempPassword };
 }
 
@@ -122,5 +126,42 @@ export async function updateUsuario(id: string, data: { nombre: string; rol: str
 
   revalidatePath("/admin/usuarios");
   revalidatePath(`/admin/usuarios/${id}`);
+  await logAction({ action: "update", entity: "usuario", entityId: id, details: { nombre: data.nombre, rol: data.rol } });
+  return { success: true };
+}
+
+export async function deleteUsuario(id: string) {
+  const caller = await assertAdmin();
+
+  // Prevent self-deletion
+  if (caller.id === id) {
+    throw new Error("No puedes eliminar tu propia cuenta");
+  }
+
+  const service = createServiceClient();
+
+  // 1. Remove DB record first — app logic relies on this table for auth checks.
+  //    If DB succeeds but Auth fails, the user can no longer access the app
+  //    (getUsuarioActual returns null) which is the safer failure state.
+  const { error: dbError } = await service
+    .from("usuarios")
+    .delete()
+    .eq("id", id);
+
+  if (dbError) throw new Error(`Error al eliminar registro: ${dbError.message}`);
+
+  // 2. Revoke Supabase Auth identity
+  const { error: authError } = await service.auth.admin.deleteUser(id);
+
+  if (authError) {
+    // DB record is already gone at this point. Log and surface the error but
+    // don't rollback — the user is effectively locked out.
+    throw new Error(
+      `Registro eliminado pero falló la revocación de credenciales: ${authError.message}`
+    );
+  }
+
+  revalidatePath("/admin/usuarios");
+  await logAction({ action: "delete", entity: "usuario", entityId: id });
   return { success: true };
 }

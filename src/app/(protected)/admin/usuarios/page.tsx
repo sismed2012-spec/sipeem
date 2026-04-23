@@ -14,8 +14,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Search } from "lucide-react";
 
-export default async function UsuariosPage() {
+type PageProps = {
+  searchParams: Promise<{ q?: string }>;
+};
+
+export default async function UsuariosPage({ searchParams }: PageProps) {
+  const params = await searchParams;
   const usuarioLogueado = await getUsuarioActual();
 
   // 1. Session and role validation
@@ -42,10 +48,20 @@ export default async function UsuariosPage() {
     operador: "bg-slate-100 text-slate-700 border-slate-200",
   };
 
+  // Stats always reflect the full list regardless of search
   const totalUsers = usuariosList.length;
-  // Group director and admin as administrative personnel
   const adminUsers = usuariosList.filter((u) => u.rol === "director" || u.rol === "admin").length;
   const operadorUsers = usuariosList.filter((u) => u.rol === "operador").length;
+
+  // Server-side filtering by name or email
+  const q = params.q?.trim().toLowerCase() ?? "";
+  const filtered = q
+    ? usuariosList.filter(
+        (u) =>
+          u.nombre?.toLowerCase().includes(q) ||
+          u.email?.toLowerCase().includes(q)
+      )
+    : usuariosList;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -98,12 +114,15 @@ export default async function UsuariosPage() {
 
       {/* Search and Action Bar */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div className="relative w-full md:w-96">
+        <form action="/admin/usuarios" method="get" className="relative w-full md:w-96">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4 pointer-events-none" />
           <Input
+            name="q"
             placeholder="Buscar por nombre o email..."
-            className="pl-4 rounded-xl border-slate-200 bg-white"
+            defaultValue={params.q ?? ""}
+            className="pl-10 rounded-xl border-slate-200 bg-white"
           />
-        </div>
+        </form>
         <Link href="/admin/usuarios/nuevo">
           <Button className="w-full md:w-auto rounded-xl bg-slate-900 font-bold hover:bg-slate-800">
             <span className="mr-2">+</span> Nuevo usuario
@@ -113,9 +132,9 @@ export default async function UsuariosPage() {
 
       {/* Users Table */}
       <Card className="border-slate-200 shadow-sm overflow-hidden rounded-2xl md:min-h-96">
-        {totalUsers === 0 ? (
+        {filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center p-12 text-center text-slate-400">
-            <p>No se encontraron usuarios registrados.</p>
+            <p>{q ? `Sin resultados para "${params.q}"` : "No se encontraron usuarios registrados."}</p>
           </div>
         ) : (
           <Table>
@@ -129,7 +148,7 @@ export default async function UsuariosPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {usuariosList.map((u) => (
+              {filtered.map((u) => (
                 <TableRow key={u.id} className="hover:bg-slate-50/50 transition-colors">
                   <TableCell className="font-semibold text-slate-900">{u.nombre}</TableCell>
                   <TableCell className="text-slate-600">{u.email}</TableCell>

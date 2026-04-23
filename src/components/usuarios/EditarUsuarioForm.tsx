@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { updateUsuario } from "@/actions/usuarios";
+import { updateUsuario, deleteUsuario } from "@/actions/usuarios";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,6 +29,8 @@ export default function EditarUsuarioForm({ usuario }: EditarUsuarioFormProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -52,7 +54,26 @@ export default function EditarUsuarioForm({ usuario }: EditarUsuarioFormProps) {
     }
   }
 
+  async function handleDelete() {
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      return;
+    }
+    setDeleting(true);
+    try {
+      await deleteUsuario(usuario.id);
+      toast.success("Usuario eliminado correctamente");
+      router.push("/admin/usuarios");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error al eliminar usuario");
+      setConfirmDelete(false);
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   return (
+    <>
     <Card className="max-w-2xl mx-auto border-slate-200 shadow-md">
       <CardHeader>
         <CardTitle className="text-2xl font-black text-slate-900">Editar Perfil</CardTitle>
@@ -125,5 +146,49 @@ export default function EditarUsuarioForm({ usuario }: EditarUsuarioFormProps) {
         </form>
       </CardContent>
     </Card>
+
+    <Card className="max-w-2xl mx-auto border-red-100 shadow-md mt-6">
+      <CardHeader>
+        <CardTitle className="text-base font-bold text-red-600">Zona de peligro</CardTitle>
+        <p className="text-sm text-slate-500">
+          Eliminar al usuario revoca su acceso de forma permanente. Esta acción no se puede deshacer.
+        </p>
+      </CardHeader>
+      <CardContent>
+        <div className="flex items-center gap-3">
+          <Button
+            type="button"
+            variant="outline"
+            disabled={deleting}
+            onClick={handleDelete}
+            className={`rounded-xl font-semibold border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors ${
+              confirmDelete ? "bg-red-50 border-red-400" : ""
+            }`}
+          >
+            {deleting
+              ? "Eliminando..."
+              : confirmDelete
+              ? "Confirmar eliminación"
+              : "Eliminar usuario"}
+          </Button>
+          {confirmDelete && !deleting && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setConfirmDelete(false)}
+              className="rounded-xl border-slate-200 font-semibold text-slate-600 hover:bg-slate-50"
+            >
+              Cancelar
+            </Button>
+          )}
+        </div>
+        {confirmDelete && !deleting && (
+          <p className="mt-3 text-xs text-red-500 font-medium">
+            Haz clic en &quot;Confirmar eliminación&quot; para proceder. El usuario perderá acceso de inmediato.
+          </p>
+        )}
+      </CardContent>
+    </Card>
+    </>
   );
 }

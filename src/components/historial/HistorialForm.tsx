@@ -211,7 +211,7 @@ export default function HistorialForm({
               </Label>
               <Select
                 value={municipioId}
-                onValueChange={setMunicipioId}
+                onValueChange={(v) => setMunicipioId(v ?? "")}
                 required
               >
                 <SelectTrigger className="rounded-xl border-slate-200 h-11 bg-white">
@@ -261,7 +261,7 @@ export default function HistorialForm({
               </Label>
               <Select
                 value={partidoGanadorId}
-                onValueChange={setPartidoGanadorId}
+                onValueChange={(v) => setPartidoGanadorId(v ?? "")}
                 required
               >
                 <SelectTrigger className="rounded-xl border-slate-200 h-11 bg-white">

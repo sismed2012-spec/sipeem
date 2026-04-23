@@ -93,7 +93,7 @@ export default function HistorialFilters({
 
         <Select
           defaultValue={currentParams.municipioId || "all"}
-          onValueChange={(val) => updateParams("municipioId", val)}
+          onValueChange={(val) => updateParams("municipioId", val ?? "all")}
         >
           <SelectTrigger className="rounded-xl border-slate-200 bg-white">
             <SelectValue placeholder="Municipio" />
@@ -110,7 +110,7 @@ export default function HistorialFilters({
 
         <Select
           defaultValue={currentParams.anio || "all"}
-          onValueChange={(val) => updateParams("anio", val)}
+          onValueChange={(val) => updateParams("anio", val ?? "all")}
         >
           <SelectTrigger className="rounded-xl border-slate-200 bg-white">
             <SelectValue placeholder="Año" />
@@ -127,7 +127,7 @@ export default function HistorialFilters({
 
         <Select
           defaultValue={currentParams.partidoId || "all"}
-          onValueChange={(val) => updateParams("partidoId", val)}
+          onValueChange={(val) => updateParams("partidoId", val ?? "all")}
         >
           <SelectTrigger className="rounded-xl border-slate-200 bg-white">
             <SelectValue placeholder="Fuerza ganadora" />
