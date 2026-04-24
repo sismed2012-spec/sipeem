@@ -201,3 +201,30 @@ export async function getEstructuraBySeccion(
     ultimo_evento: ultimoEvento?.[0]?.fecha ?? null,
   };
 }
+
+// ── Realtime cobertura ────────────────────────────────────────────────────────
+
+export interface CoberturaSeccion {
+  seccion_id: number;
+  seccion_numero: number;
+  compromisos: number;
+  meta: number;
+}
+
+export async function getCoberturaByMunicipio(
+  municipioId: number
+): Promise<CoberturaSeccion[]> {
+  await assertAdmin();
+  const svc = createServiceClient();
+  const { data, error } = await svc
+    .from("compromisos_seccion")
+    .select("seccion_id, compromisos, meta, secciones!inner(numero)")
+    .eq("municipio_id", municipioId);
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row: any) => ({
+    seccion_id: row.seccion_id,
+    seccion_numero: row.secciones.numero,
+    compromisos: row.compromisos,
+    meta: row.meta,
+  }));
+}
