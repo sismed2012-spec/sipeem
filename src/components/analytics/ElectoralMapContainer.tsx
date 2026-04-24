@@ -18,6 +18,8 @@ import {
 } from "@/components/ui/select";
 import { Card } from "@/components/ui/card";
 import { Loader2, Calendar, Map as MapIcon, Info } from "lucide-react";
+import { getCoberturaByMunicipio } from "@/actions/estructura";
+import { createClient } from "@/lib/supabase/client";
 
 // geoData pre-loaded in Server Component to avoid client-side round-trip
 export function ElectoralMapContainer({
@@ -36,6 +38,7 @@ export function ElectoralMapContainer({
   const [activeOverlays, setActiveOverlays] = useState<Set<OverlayKey>>(new Set());
   const [overlayData, setOverlayData] = useState<Record<string, any>>({});
   const [selectedGeoMunicipioId, setSelectedGeoMunicipioId] = useState<number | null>(null);
+  const [coberturaMap, setCoberturaMap] = useState<Record<number, { compromisos: number; meta: number }>>({});
 
   useEffect(() => {
     if (!isAnalytic) return;
@@ -54,6 +57,8 @@ export function ElectoralMapContainer({
       .finally(() => setDataLoading(false));
   }, [selectedYear, isAnalytic]);
 
+  const seccionOverlayActive = activeOverlays.has("seccion");
+
   // When municipio is selected and seccion overlay is on, reload secciones for it
   useEffect(() => {
     if (!activeOverlays.has("seccion") || !selectedGeoMunicipioId) return;
@@ -62,6 +67,65 @@ export function ElectoralMapContainer({
       .then((data) => setOverlayData((d) => ({ ...d, seccion: data })))
       .catch(console.error);
   }, [selectedGeoMunicipioId, activeOverlays]);
+
+  useEffect(() => {
+    const id = selectedGeoMunicipioId;
+    if (!id || !seccionOverlayActive) {
+      setCoberturaMap({});
+      return;
+    }
+
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    const supabase = createClient();
+
+    getCoberturaByMunicipio(id)
+      .then((rows) => {
+        const cmap: Record<number, { compromisos: number; meta: number }> = {};
+        const idMap: Record<number, number> = {};
+        for (const r of rows) {
+          cmap[r.seccion_numero] = { compromisos: r.compromisos, meta: r.meta };
+          idMap[r.seccion_id] = r.seccion_numero;
+        }
+        setCoberturaMap(cmap);
+
+        channel = supabase
+          .channel(`compromisos-${id}`)
+          .on(
+            "postgres_changes",
+            {
+              event: "*",
+              schema: "public",
+              table: "compromisos_seccion",
+              filter: `municipio_id=eq.${id}`,
+            },
+            (payload) => {
+              const rec = (payload.new ?? payload.old) as any;
+              const numero = idMap[rec.seccion_id];
+              if (numero == null) return;
+              if (payload.eventType === "DELETE") {
+                setCoberturaMap((prev) => {
+                  const n = { ...prev };
+                  delete n[numero];
+                  return n;
+                });
+              } else {
+                setCoberturaMap((prev) => ({
+                  ...prev,
+                  [numero]: { compromisos: rec.compromisos, meta: rec.meta },
+                }));
+              }
+            }
+          )
+          .subscribe();
+      })
+      .catch(() => {
+        // snapshot failed — secciones will show gray, no crash
+      });
+
+    return () => {
+      channel?.unsubscribe();
+    };
+  }, [selectedGeoMunicipioId, seccionOverlayActive]);
 
   const toggleOverlay = useCallback(
     async (key: OverlayKey) => {
@@ -225,6 +289,7 @@ export function ElectoralMapContainer({
           isAnalytic={isAnalytic}
           onMunicipioSelect={setSelectedGeoMunicipioId}
           onVerSecciones={handleVerSecciones}
+          coberturaMap={coberturaMap}
         />
 
         {isAnalytic && <MapLegend data={analytics} />}
@@ -233,6 +298,7 @@ export function ElectoralMapContainer({
           activeOverlays={activeOverlays}
           onToggle={toggleOverlay}
           hasMunicipioSelected={selectedGeoMunicipioId !== null}
+          coberturaMap={coberturaMap}
         />
 
         {!isAnalytic && (
