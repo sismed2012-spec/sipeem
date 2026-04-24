@@ -1,9 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { headers } from "next/headers";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getUsuarioActual } from "./auth";
+import { queryLayer } from "@/lib/arcgis";
 import { Municipio } from "@/lib/types";
 
 async function assertAdmin() {
@@ -26,30 +26,19 @@ function normalize(s: string) {
 }
 
 /**
- * Sincroniza el catálogo de municipios desde el GeoJSON oficial.
+ * Sincroniza el catálogo de municipios desde el FeatureServer ArcGIS.
  * Idempotente y seguro de ejecutar múltiples veces.
  */
 export async function syncMunicipiosFromGeoJSON() {
   await assertAdmin();
   const service = createServiceClient();
-  
-  // 1. Cargar el GeoJSON desde la ruta pública.
-  // Usar fetch en lugar de fs.readFileSync para compatibilidad con todos los
-  // entornos de ejecución de Vercel (Serverless y Edge) sin depender del
-  // sistema de archivos del runtime.
-  const host = (await headers()).get("host") ?? "localhost:3000";
-  const proto = process.env.NODE_ENV === "production" ? "https" : "http";
-  const geoRes = await fetch(`${proto}://${host}/maps/edomex_municipios_wgs84.geojson`);
 
-  if (!geoRes.ok) {
-    throw new Error(
-      `No se pudo cargar la cartografía base (HTTP ${geoRes.status}). ` +
-      `Verifique que public/maps/edomex_municipios_wgs84.geojson exista.`
-    );
-  }
+  // 1. Obtener municipios de ArcGIS (sin geometría — solo atributos)
+  const geojson = await queryLayer("municipio", {
+    outFields: "*",
+    returnGeometry: false,
+  });
 
-  const geojson = await geoRes.json();
-  
   // 2. Obtener catálogo actual de la DB
   const { data: currentMuns, error: fetchError } = await service
     .from("municipios")
@@ -70,7 +59,12 @@ export async function syncMunicipiosFromGeoJSON() {
 
   for (const feature of geojson.features) {
     results.processed++;
-    const { municipio: geoId, nombre: geoName } = feature.properties;
+    const p = feature.properties ?? {};
+    // ArcGIS field names vary by service version — use defensive fallback chain
+    const geoId: number | null =
+      p.CVEGEO ?? p.CVE_MUN ?? p.MUNICIPIO ?? p.municipio_id ?? null;
+    const geoName: string =
+      p.NOMGEO ?? p.NOM_MUN ?? p.NOMBRE ?? p.nombre ?? "";
     const geoNameNorm = normalize(geoName);
 
     // Estrategia de búsqueda
