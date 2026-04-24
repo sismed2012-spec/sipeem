@@ -26,12 +26,14 @@ interface Props {
   activeOverlays: Set<OverlayKey>;
   onToggle: (key: OverlayKey) => void;
   hasMunicipioSelected: boolean;
+  coberturaMap?: Record<number, { compromisos: number; meta: number }>;
 }
 
 export function LayerPanel({
   activeOverlays,
   onToggle,
   hasMunicipioSelected,
+  coberturaMap = {},
 }: Props) {
   return (
     <div className="absolute top-4 right-4 z-20 bg-slate-900/95 backdrop-blur-sm rounded-xl p-3 shadow-2xl min-w-[140px] border border-slate-700/50">
@@ -81,6 +83,24 @@ export function LayerPanel({
           </button>
         );
       })}
+
+      {activeOverlays.has("seccion") && (
+        <div className="border-t border-slate-700 pt-2 mt-2">
+          <p className="text-[9px] text-slate-500 uppercase tracking-widest mb-1.5">Cobertura</p>
+          {[
+            { color: "#10b981", label: "100% Completado" },
+            { color: "#3b82f6", label: "67–99% Avanzado" },
+            { color: "#f59e0b", label: "34–66% En progreso" },
+            { color: "#ef4444", label: "0–33% Crítico" },
+            { color: "#475569", label: "Sin meta" },
+          ].map(({ color, label }) => (
+            <div key={label} className="flex items-center gap-1.5 py-0.5">
+              <div className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: color }} />
+              <span className="text-[10px] text-slate-400">{label}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
