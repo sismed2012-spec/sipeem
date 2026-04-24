@@ -110,3 +110,94 @@ export async function upsertCompromisoSeccion(
   if (error) throw new Error(error.message);
   revalidate(municipioId);
 }
+
+// ── Popup summary types ───────────────────────────────────────────────────────
+
+export interface EstructuraResumen {
+  promotores: number;
+  secciones_total: number;
+  compromisos: number;
+  ultimo_evento: string | null;
+}
+
+export interface SeccionDetalle {
+  promotor: string | null;
+  compromisos: number;
+  meta: number;
+  ultimo_evento: string | null;
+}
+
+// ── Popup summary actions ─────────────────────────────────────────────────────
+
+export async function getEstructuraResumenByMunicipio(
+  municipioId: number
+): Promise<EstructuraResumen> {
+  await assertAdmin();
+  const svc = createServiceClient();
+
+  const [
+    { count: promotoresCount },
+    { count: seccionesCount },
+    { count: compromisos },
+    { data: ultimoEvento },
+  ] = await Promise.all([
+    svc
+      .from("promotores")
+      .select("*", { count: "exact", head: true })
+      .eq("municipio_id", municipioId),
+    svc
+      .from("secciones")
+      .select("*", { count: "exact", head: true })
+      .eq("municipio_id", municipioId),
+    svc
+      .from("compromisos_seccion")
+      .select("*", { count: "exact", head: true })
+      .eq("municipio_id", municipioId),
+    svc
+      .from("compromisos_seccion")
+      .select("fecha")
+      .eq("municipio_id", municipioId)
+      .order("fecha", { ascending: false })
+      .limit(1),
+  ]);
+
+  return {
+    promotores: promotoresCount ?? 0,
+    secciones_total: seccionesCount ?? 0,
+    compromisos: compromisos ?? 0,
+    ultimo_evento: ultimoEvento?.[0]?.fecha ?? null,
+  };
+}
+
+export async function getEstructuraBySeccion(
+  municipioId: number,
+  seccionNumero: number
+): Promise<SeccionDetalle> {
+  await assertAdmin();
+  const svc = createServiceClient();
+
+  const { data: seccion } = await svc
+    .from("secciones")
+    .select("id, meta, promotores(nombre)")
+    .eq("municipio_id", municipioId)
+    .eq("numero", seccionNumero)
+    .single();
+
+  if (!seccion) {
+    return { promotor: null, compromisos: 0, meta: 0, ultimo_evento: null };
+  }
+
+  const { count: compromisos, data: ultimoEvento } = await svc
+    .from("compromisos_seccion")
+    .select("fecha", { count: "exact" })
+    .eq("seccion_id", (seccion as any).id)
+    .order("fecha", { ascending: false })
+    .limit(1);
+
+  return {
+    promotor: (seccion as any).promotores?.nombre ?? null,
+    compromisos: compromisos ?? 0,
+    meta: (seccion as any).meta ?? 0,
+    ultimo_evento: ultimoEvento?.[0]?.fecha ?? null,
+  };
+}
