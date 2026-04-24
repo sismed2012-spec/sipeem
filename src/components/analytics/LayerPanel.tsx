@@ -95,7 +95,7 @@ export function LayerPanel({
             { color: "#475569", label: "Sin meta" },
           ].map(({ color, label }) => (
             <div key={label} className="flex items-center gap-1.5 py-0.5">
-              <div className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: color }} />
+              <div className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: color }} />
               <span className="text-[10px] text-slate-400">{label}</span>
             </div>
           ))}
