@@ -130,10 +130,11 @@ export function ElectoralMapContainer({
 
       {/* Area del Mapa */}
       <main className="flex-1 relative bg-slate-100 overflow-hidden shadow-inner">
-        <EdomexInteractiveMap 
-          geoData={geoData} 
-          analytics={analytics} 
-          isAnalytic={isAnalytic} 
+        <EdomexInteractiveMap
+          geoData={geoData}
+          overlayData={{}}
+          analytics={analytics}
+          isAnalytic={isAnalytic}
         />
 
         {isAnalytic && <MapLegend data={analytics} />}
