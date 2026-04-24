@@ -75,11 +75,13 @@ export function ElectoralMapContainer({
       return;
     }
 
-    let channel: ReturnType<typeof supabase.channel> | null = null;
     const supabase = createClient();
+    let active = true;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
 
     getCoberturaByMunicipio(id)
       .then((rows) => {
+        if (!active) return;
         const cmap: Record<number, { compromisos: number; meta: number }> = {};
         const idMap: Record<number, number> = {};
         for (const r of rows) {
@@ -123,6 +125,7 @@ export function ElectoralMapContainer({
       });
 
     return () => {
+      active = false;
       channel?.unsubscribe();
     };
   }, [selectedGeoMunicipioId, seccionOverlayActive]);
