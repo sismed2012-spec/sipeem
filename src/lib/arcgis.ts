@@ -1,10 +1,5 @@
 import { cache } from "react";
 
-const FEATURE_SERVER_URL = (() => {
-  const url = process.env.ARCGIS_FEATURE_SERVER_URL?.trim();
-  return url?.replace(/\/+$/, "") ?? "";
-})();
-
 export const LAYER_IDS = {
   distrito_federal: 0,
   distrito_local: 1,
@@ -21,8 +16,10 @@ export function getArcGISPortalUrl() {
   ).replace(/\/+$/, "");
 }
 
-export function getArcGISAuthMode() {
-  return process.env.ARCGIS_AUTH_MODE?.trim() || "none";
+export function getArcGISAuthMode(): "none" | "token" | "client_credentials" {
+  const mode = process.env.ARCGIS_AUTH_MODE?.trim();
+  if (mode === "token" || mode === "client_credentials") return mode;
+  return "none";
 }
 
 export function isArcGISEnabled() {
@@ -61,6 +58,10 @@ async function resolveToken(): Promise<string> {
       body: body.toString(),
       cache: "no-store",
     });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`ArcGIS token HTTP ${res.status}: ${text.slice(0, 200)}`);
+    }
     const json = await res.json();
     if (json.error || !json.access_token) {
       throw new Error(
@@ -68,7 +69,11 @@ async function resolveToken(): Promise<string> {
       );
     }
     _cachedToken = json.access_token as string;
-    _tokenExpiresAt = now + (json.expires_in as number) * 1000;
+    const expiresIn = Number(json.expires_in);
+    if (!expiresIn) {
+      throw new Error("ArcGIS token response missing expires_in");
+    }
+    _tokenExpiresAt = now + expiresIn * 1000;
     return _cachedToken;
   }
 
@@ -87,13 +92,14 @@ export async function queryLayer(
     resultOffset?: number;
   }
 ): Promise<GeoJSON.FeatureCollection> {
-  if (!FEATURE_SERVER_URL) {
+  const featureServerUrl = process.env.ARCGIS_FEATURE_SERVER_URL?.trim()?.replace(/\/+$/, "") ?? "";
+  if (!featureServerUrl) {
     throw new Error(
       "ARCGIS_FEATURE_SERVER_URL no está definida. Configura las variables de entorno ArcGIS."
     );
   }
 
-  const url = new URL(`${FEATURE_SERVER_URL}/${LAYER_IDS[layer]}/query`);
+  const url = new URL(`${featureServerUrl}/${LAYER_IDS[layer]}/query`);
   url.searchParams.set("f", "geojson");
   url.searchParams.set("where", params?.where ?? "1=1");
   url.searchParams.set("outFields", params?.outFields ?? "*");
@@ -114,18 +120,17 @@ export async function queryLayer(
     cache: "no-store",
   });
 
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`ArcGIS HTTP ${res.status}: ${text.slice(0, 200)}`);
+  }
   const json = await res.json();
-
   if (json.error) {
     const code: number = json.error.code;
     if (code === 498 || code === 499) {
       throw new Error("Token ArcGIS inválido");
     }
-    throw new Error(json.error.message ?? "Error ArcGIS desconocido");
-  }
-
-  if (!res.ok) {
-    throw new Error(`ArcGIS HTTP ${res.status}`);
+    throw new Error(json.error.message ?? JSON.stringify(json.error));
   }
 
   return json as GeoJSON.FeatureCollection;
