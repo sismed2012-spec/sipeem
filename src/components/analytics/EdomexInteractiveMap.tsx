@@ -14,6 +14,17 @@ interface Props {
   isAnalytic: boolean;
   onMunicipioSelect?: (geoId: number | null) => void;
   onVerSecciones?: () => void;
+  coberturaMap?: Record<number, { compromisos: number; meta: number }>;
+}
+
+// ── Cobertura color scale ─────────────────────────────────────────────────────
+function coberturaColor(compromisos: number, meta: number): string {
+  if (!meta) return "#475569";
+  const pct = compromisos / meta;
+  if (pct >= 1.0) return "#10b981";
+  if (pct >= 0.67) return "#3b82f6";
+  if (pct >= 0.34) return "#f59e0b";
+  return "#ef4444";
 }
 
 // ── Field name mapping — update primary keys after inspecting live ArcGIS response ──
@@ -60,6 +71,7 @@ export function EdomexInteractiveMap({
   isAnalytic,
   onMunicipioSelect,
   onVerSecciones,
+  coberturaMap = {},
 }: Props) {
   const [hoveredMun, setHoveredMun] = useState<any>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
@@ -195,12 +207,20 @@ export function EdomexInteractiveMap({
               <g key={`overlay-${overlayKey}`}>
                 {fc.features.map((feature: any, i: number) => {
                   if (overlayKey === "seccion") {
+                    const p = feature.properties;
+                    const seccionNumero = Number(
+                      p.SECCION ?? p.CVE_SECC ?? p.seccion ?? 0
+                    );
+                    const cobertura = coberturaMap[seccionNumero];
+                    const sectionColor = cobertura
+                      ? coberturaColor(cobertura.compromisos, cobertura.meta)
+                      : "#475569";
                     return (
                       <path
                         key={`sec-${i}`}
                         d={featureToPath(feature)}
-                        fill={`${color}22`}
-                        stroke={color}
+                        fill={`${sectionColor}55`}
+                        stroke={sectionColor}
                         strokeWidth="0.4"
                         className="cursor-pointer hover:brightness-90"
                         onClick={(e) => {
