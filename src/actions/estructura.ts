@@ -219,12 +219,18 @@ export async function getCoberturaByMunicipio(
   const { data, error } = await svc
     .from("compromisos_seccion")
     .select("seccion_id, compromisos, meta, secciones!inner(numero)")
-    .eq("municipio_id", municipioId);
+    .eq("municipio_id", municipioId)
+    .order("fecha", { ascending: false });
   if (error) throw new Error(error.message);
-  return (data ?? []).map((row: any) => ({
-    seccion_id: row.seccion_id,
-    seccion_numero: row.secciones.numero,
-    compromisos: row.compromisos,
-    meta: row.meta,
-  }));
+  const seen = new Set<number>();
+  return (data ?? []).flatMap((row: any) => {
+    if (seen.has(row.seccion_id)) return [];
+    seen.add(row.seccion_id);
+    return [{
+      seccion_id: row.seccion_id,
+      seccion_numero: row.secciones.numero,
+      compromisos: row.compromisos,
+      meta: row.meta,
+    }];
+  });
 }
