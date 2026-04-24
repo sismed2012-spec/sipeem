@@ -1,26 +1,13 @@
 import { Suspense } from "react";
-import { headers } from "next/headers";
 import { getUsuarioActual } from "@/actions/auth";
 import { ElectoralMapContainer } from "@/components/analytics/ElectoralMapContainer";
+import { getBaseMapData } from "@/lib/arcgis";
 
 export default async function MapaPage() {
   const usuario = await getUsuarioActual();
-  const isAnalytic = usuario?.rol === 'admin' || usuario?.rol === 'director';
+  const isAnalytic = usuario?.rol === "admin" || usuario?.rol === "director";
 
-  // Pre-cargar el GeoJSON en el servidor para eliminar el fetch client-side.
-  // force-cache lo mantiene en memoria entre renders; el archivo es estático.
-  const host = (await headers()).get("host") ?? "localhost:3000";
-  const proto = process.env.NODE_ENV === "production" ? "https" : "http";
-  const geoRes = await fetch(
-    `${proto}://${host}/maps/edomex_municipios_wgs84.geojson`,
-    { cache: "force-cache" }
-  );
-
-  if (!geoRes.ok) {
-    throw new Error(`No se pudo cargar la cartografía base (HTTP ${geoRes.status})`);
-  }
-
-  const geoData = await geoRes.json();
+  const geoData = await getBaseMapData();
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] bg-slate-50/50">
