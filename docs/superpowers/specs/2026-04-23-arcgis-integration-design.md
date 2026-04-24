@@ -10,7 +10,10 @@ Reemplazar el GeoJSON estático local (`edomex_municipios_wgs84.geojson`) con da
 ## Servicio ArcGIS
 
 - **URL base:** `https://services1.arcgis.com/IgzKWPBqILuPKm5Y/arcgis/rest/services/Estado_de_México/FeatureServer`
-- **Autenticación:** token requerido (`Token Required: 499`). El usuario genera el token en ArcGIS Online → Account → My API Keys.
+- **Autenticación:** token requerido (`Token Required: 499`).
+  - **Desarrollo/prueba:** token temporal desde ArcGIS Online → OAuth 2.0 (expira en 1 hora).
+  - **Producción:** flujo OAuth2 Client Credentials — el servidor intercambia `ARCGIS_CLIENT_ID` + `ARCGIS_CLIENT_SECRET` por un token de hasta 2 semanas via `https://www.arcgis.com/sharing/rest/oauth2/token`. El token se cachea en memoria y se regenera antes de expirar.
+  - Client ID disponible: `sUbLwzjLzl0QeQCT`
 - **Capas:**
 
 | ID | Nombre | Features aprox. |
@@ -84,9 +87,11 @@ export async function queryLayer(
 ```
 
 - Default: `outSR=4326`, `f=geojson`, `where=1=1`, `returnGeometry=true`
-- Token automático desde `ARCGIS_TOKEN`
-- `municipio` y `entidad` usan `cache()` de React (estables, no cambian)
-- `seccion` nunca cachea (se filtra por municipio en cada request)
+- Token resuelto automáticamente por `getArcGISToken()`:
+  - Si `ARCGIS_AUTH_MODE=client_credentials` → POST a `{ARCGIS_PORTAL_URL}/sharing/rest/oauth2/token` con `client_id` + `client_secret` + `grant_type=client_credentials`. Token cacheado en módulo (variable de módulo + timestamp de expiración), se regenera 5 min antes de expirar.
+  - Si `ARCGIS_AUTH_MODE=token` → usa `ARCGIS_TOKEN` directamente (solo para pruebas locales).
+- `municipio` y `entidad` usan `cache()` de React (estables, no cambian entre renders de la misma request)
+- `seccion` nunca cachea — siempre lleva `where` de municipio específico
 
 **Helpers que se eliminan:** `getArcGISLayerCatalog`, `getArcGISLayerConfig`, `assertArcGISReady`, `ARCGIS_LAYER_KEYS`, `ARCGIS_QUERY_PARAM_ALLOWLIST` con env vars de capa.
 
@@ -188,14 +193,26 @@ ARCGIS_LAYER_RUTAS_URL
 ### Agregar
 ```
 ARCGIS_FEATURE_SERVER_URL=https://services1.arcgis.com/IgzKWPBqILuPKm5Y/arcgis/rest/services/Estado_de_México/FeatureServer
+ARCGIS_CLIENT_ID=sUbLwzjLzl0QeQCT
+ARCGIS_CLIENT_SECRET=<secreto de cliente desde ArcGIS Online>
 ```
 
-### Mantener
+### Mantener / actualizar
 ```
-ARCGIS_AUTH_MODE=token
-ARCGIS_TOKEN=<generar en ArcGIS Online → Account → My API Keys>
+ARCGIS_AUTH_MODE=client_credentials   ← cambiar de "token" a "client_credentials"
 ARCGIS_PORTAL_URL=https://www.arcgis.com
-NEXT_PUBLIC_ENABLE_ARCGIS_MAP=true  ← cambiar de false a true
+NEXT_PUBLIC_ENABLE_ARCGIS_MAP=true    ← cambiar de false a true
+```
+
+### Eliminar
+```
+ARCGIS_TOKEN   ← reemplazado por client_credentials flow
+```
+
+### Solo para prueba local rápida (no commitear)
+```
+ARCGIS_TOKEN=<token temporal de 1 hora desde ArcGIS Online>
+ARCGIS_AUTH_MODE=token
 ```
 
 ---
