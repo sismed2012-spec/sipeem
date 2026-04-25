@@ -61,6 +61,7 @@ export default function InteligenciaChatShell({
   const canActuallySave = canSave && effectiveMunicipioId !== undefined;
 
   async function handleSend(content: string) {
+    setCanSave(false);
     const userMsg: Message = { role: "user", content };
     const updatedMessages = [...messages, userMsg];
     setMessages([...updatedMessages, { role: "assistant", content: "" }]);
@@ -93,26 +94,30 @@ export default function InteligenciaChatShell({
       const decoder = new TextDecoder();
       let assistantText = "";
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        for (const line of chunk.split("\n")) {
-          if (line.startsWith("0:")) {
-            try {
-              const parsed = JSON.parse(line.slice(2));
-              if (typeof parsed === "string") {
-                assistantText += parsed;
-                setMessages((prev) => [
-                  ...prev.slice(0, -1),
-                  { role: "assistant", content: assistantText },
-                ]);
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value, { stream: true });
+          for (const line of chunk.split("\n")) {
+            if (line.startsWith("0:")) {
+              try {
+                const parsed = JSON.parse(line.slice(2));
+                if (typeof parsed === "string") {
+                  assistantText += parsed;
+                  setMessages((prev) => [
+                    ...prev.slice(0, -1),
+                    { role: "assistant", content: assistantText },
+                  ]);
+                }
+              } catch {
+                // skip malformed lines
               }
-            } catch {
-              // skip malformed lines
             }
           }
         }
+      } finally {
+        reader.releaseLock();
       }
       setCanSave(true);
     } catch (err) {
