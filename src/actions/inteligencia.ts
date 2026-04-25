@@ -3,6 +3,7 @@
 import { createServiceClient } from "@/lib/supabase/service";
 import { getUsuarioActual } from "./auth";
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { generateText } from "ai";
 import { MODEL_RAPIDO } from "@/lib/ai";
 import type { Message } from "@/lib/inteligencia-types";
@@ -41,5 +42,6 @@ export async function guardarSintesisIA(
     .single();
 
   if (error) throw new Error(error.message);
+  revalidatePath(`/admin/estrategia-municipal/${municipioId}`);
   return data.id;
 }
