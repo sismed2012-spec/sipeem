@@ -1,87 +1,103 @@
-# Motor de Inteligencia Electoral — SIPEEM Design Spec
+# Motor de Inteligencia Electoral — SIPEEM Design Spec (v2)
 Date: 2026-04-24
 
 ## Objetivo
 
-Motor de análisis conversacional que permite al director/admin hacer preguntas en lenguaje natural sobre cualquier municipio y recibir respuestas basadas en los datos reales del sistema: historial electoral, proyecciones, termómetros, cobertura de secciones, actores políticos y estrategia. Con historial de conversación en sesión y capacidad de guardar análisis.
+Evolucionar el Asistente IA existente (`AsistenteChat` + `/api/ai/municipio-context/route.ts`) en una experiencia más completa con panel de contexto visual, análisis global cross-municipio y capacidad de guardar síntesis ejecutivas. No se crea una segunda experiencia de chat — se mejora la existente.
 
 ---
 
-## Decisiones de diseño
+## Estado actual del sistema
+
+Ya existe y funciona:
+
+| Elemento | Archivo | Estado |
+|----------|---------|--------|
+| Chat con streaming | `src/components/actores/AsistenteChat.tsx` | ✅ Funciona |
+| Route handler streaming | `src/app/api/ai/municipio-context/route.ts` | ✅ Funciona |
+| Route handler genérico | `src/app/api/ai/chat/route.ts` | ✅ Funciona |
+| Tab "Asistente IA" | `src/components/actores/ActoresTabs.tsx:48` | ✅ Existe |
+
+Contexto que YA carga `municipio-context/route.ts`: estrategia, historial electoral (con %, siglas, margen), termómetros, comité, aspirantes, planilla.
+
+Contexto que FALTA en la ruta actual: cobertura de secciones (%), proyección numérica/nivel, competencia/riesgo electoral.
+
+---
+
+## Decisiones de diseño (definitivas)
 
 | Decisión | Elección | Razón |
 |----------|----------|-------|
-| Patrón de interacción | Panel + Chat Integrado | Contexto visible mientras se chatea |
-| Ubicación | Global (`/admin/inteligencia`) + tab en Estrategia Municipal | Análisis cross-municipio y contextual |
-| Layout panel | Tabs: KPIs · Actores · Historial | Equilibrio densidad/orden |
-| Historial | Client-side `useState<Message[]>` | Suficiente para sesiones cortas, sin DB extra |
-| Respuestas | Bloqueante (spinner + texto completo) | Consistente con briefings existentes |
-| Guardado | Tabla `briefings` existente | Sin nuevas tablas |
+| Patrón base | Evolucionar AsistenteChat, no duplicar | Ya existe, funciona, streaming |
+| Respuestas | Streaming (Route Handler) | Consistente con lo existente; retroceder a blocking sería downgrade |
+| Tab municipal | Conservar "Asistente IA" en ActoresTabs; reemplazar contenido | Sin cambio de UX visible para el usuario |
+| Nueva vista | `/admin/inteligencia` para análisis global/comparativo | Modo nuevo, no conflicto con modal municipal |
+| Panel de contexto | `ContextPanel` nuevo, montado junto al chat | En ambos modos |
+| tendenciaML | Excluida de esta fase | Datos no conectados aún al contexto del chat |
+| Proyección | Usar `getProyeccionMunicipios()` filtrando por municipio | Consistencia con el resto del sistema |
+| Guardar | Síntesis ejecutiva (no transcript crudo) en tabla `briefings` | Mantiene calidad del repositorio ejecutivo |
+| generadoPor | Server lo toma de `getUsuarioActual()` siempre | Igual que en `briefings.ts` |
+| Historial | Últimos 8 mensajes + mensaje actual enviados al LLM | Control de costo/latencia |
+| Modo global | Selector de municipios + top-urgencia como sugerencia | Explícitamente comparativo, no "todo" |
 
 ---
 
 ## Arquitectura
 
+### Modo municipal (evolución del existente)
+
 ```
-Cliente (React)
-  useState<Message[]>          ← historial en memoria (resetea al cambiar página)
-  useState<number | null>      ← municipioId seleccionado
+ActoresTabs → tab "Asistente IA"
+  InteligenciaChatShell (reemplaza AsistenteChat)
+    ├── ContextPanel (izquierda, ~30%)
+    │     Tabs: KPIs · Actores · Historial
+    │     Botón "Guardar síntesis"
+    └── ChatArea (derecha, ~70%)
+          useState<Message[]>  ← historial completo en cliente
+          Envía: últimos 8 mensajes al API
+          POST /api/ai/municipio-context  ← ruta existente, enriquecida
+```
 
-  onSubmit(userText)
-    → Server Action: consultarInteligencia(messages, municipioId?)
-        ← carga contexto del municipio desde Supabase
-        ← construye system prompt con todos los datos
-        ← llama generateText({ model, system, messages })
-        → devuelve { text: string }
-    → push assistant message al array local
-    → render
+### Modo global (nuevo)
 
-Dos entry points (mismos componentes):
-  /admin/inteligencia              → selector de municipio libre
-  /admin/estrategia-municipal/[id] → tab "IA" con municipioId fijo
+```
+/admin/inteligencia (nueva página)
+  InteligenciaChatShell (mismo componente, mode="global")
+    ├── ContextPanel
+    │     Selector múltiple de municipios (hasta 5)
+    │     Muestra top-5 por urgency como sugerencia inicial
+    │     Botón "Guardar síntesis"
+    └── ChatArea
+          POST /api/ai/inteligencia  ← nueva ruta con contexto cross-municipio
 ```
 
 ---
 
-## Contexto que recibe la IA (por municipio)
-
-Cuando hay `municipioId`, el system prompt incluye:
-
-- **Proyección**: puntuación (0-100), nivel (bajo/medio/alto/muy_alto), scores parciales (historial, termómetros, cobertura, competencia)
-- **Tendencia ML**: margen_tendencia, r_squared, confianza
-- **Termómetros**: T1 (org. interna), T2 (competitividad), T3 (presencia territorial), T4 (movilización), T5 (imagen) — escala 0-100
-- **Cobertura**: % promedio de compromisos vs meta en secciones con meta > 0
-- **Actores**: comité (presidente, secretario), planilla (cargos y nombres), aspirantes (nombre, cargo, partido)
-- **Historial electoral**: últimas 3 elecciones (año, partido ganador, % del ganador)
-- **Competencia**: riesgo electoral (bajo/medio/alto/crítico)
-- **Estrategia**: prioridad, riesgo, oportunidad, estatus, notas ejecutivas, notas operativas
-
-Cuando **no hay** `municipioId` (modo global), el system prompt incluye los top-5 municipios por `urgencyScore` de `getSituacionGlobal()` con sus KPIs clave, para análisis comparativo.
-
----
-
-## Tipos
+## Tipos compartidos
 
 ```ts
-// Compartido entre acción y componentes
-export type Message = {
-  role: "user" | "assistant";
-  content: string;
+// src/lib/inteligencia-types.ts  ← NUEVO archivo de tipos
+export type Message = { role: "user" | "assistant"; content: string };
+
+export type MunicipioKPIs = {
+  nombre: string;
+  proyeccion: { puntuacion: number; nivel: string } | null;
+  termometros: { term1: number; term2: number; term3: number; term4: number; term5: number } | null;
+  coberturaPromedio: number | null;   // % promedio de compromisos/meta con meta > 0
+  riesgoElectoral: string | null;
+  estrategia: { prioridad: string; riesgo: string; estatus: string } | null;
 };
 
-// Datos del municipio para el panel de contexto
-export type MunicipioContextData = {
-  nombre: string;
-  proyeccion: { puntuacion: number; nivel: string; score_historial: number; score_termometros: number; score_cobertura: number; score_competencia: number } | null;
-  tendenciaML: { margen_tendencia: number; r_squared: number; confianza: string } | null;
-  termometros: { term1: number; term2: number; term3: number; term4: number; term5: number } | null;
-  coberturaPromedio: number | null;
+export type ActoresData = {
   comite: { presidente: string; secretario: string } | null;
-  planilla: { cargo: string; nombre: string }[];
+  planilla: { cargo: string; nombre: string; partido: string }[];
   aspirantes: { nombre: string; cargo_aspirado: string; partido: string }[];
-  historial: { anio: number; partido_ganador_id: number; porcentaje_ganador: number }[];
-  riesgoElectoral: string | null;
-  estrategia: { prioridad: string; riesgo: string; estatus: string; notas_ejecutivas: string } | null;
+};
+
+export type HistorialItem = {
+  anio: number;
+  winnerSiglas: string;
+  porcentaje: number | null;
 };
 ```
 
@@ -93,166 +109,374 @@ export type MunicipioContextData = {
 
 | Archivo | Responsabilidad |
 |---------|----------------|
-| `src/actions/inteligencia.ts` | Server Action `consultarInteligencia(messages, municipioId?)` |
-| `src/components/inteligencia/ChatPanel.tsx` | UI de chat: lista mensajes, input, spinner, llama la acción |
-| `src/components/inteligencia/ContextPanel.tsx` | Panel izquierdo: selector municipio, tabs KPIs/Actores/Historial, botón Guardar |
-| `src/app/(protected)/admin/inteligencia/page.tsx` | Page global: carga municipios activos, layout 30/70 |
+| `src/lib/inteligencia-types.ts` | Tipos compartidos entre componentes y rutas |
+| `src/components/inteligencia/InteligenciaChatShell.tsx` | Shell principal: monta ContextPanel + ChatArea, gestiona messages[], modo municipal/global |
+| `src/components/inteligencia/ContextPanel.tsx` | Panel izquierdo: tabs KPIs/Actores/Historial, selector municipios (modo global), botón Guardar |
+| `src/components/inteligencia/ChatArea.tsx` | Lista de mensajes, input textarea, spinner, scroll automático |
+| `src/app/(protected)/admin/inteligencia/page.tsx` | Page Server Component: carga lista municipios activos, renderiza InteligenciaChatShell mode=global |
+| `src/app/api/ai/inteligencia/route.ts` | Route Handler streaming: contexto cross-municipio para modo global |
+| `src/actions/inteligencia.ts` | `guardarSintesisIA(municipioId, messages)` — sintetiza conversación y guarda en briefings |
 
 ### Modificados
 
 | Archivo | Cambio |
 |---------|--------|
-| `src/app/(protected)/admin/estrategia-municipal/[id]/page.tsx` | Agrega tab "IA" que monta `ChatPanel` con `municipioId` fijo |
-| `src/components/layout/SidebarNav.tsx` | Nueva entrada "Inteligencia IA" con ícono `Brain` de lucide-react |
+| `src/app/api/ai/municipio-context/route.ts` | Agregar cobertura %, proyección real y riesgo electoral al contexto |
+| `src/components/actores/ActoresTabs.tsx` | Cambiar `<AsistenteChat>` por `<InteligenciaChatShell mode="municipal" municipioId={municipioId}>` |
+| `src/components/layout/SidebarNav.tsx` | Nueva entrada "Inteligencia IA" con ícono `Brain` |
+
+### Eliminados
+
+| Archivo | Razón |
+|---------|-------|
+| `src/components/actores/AsistenteChat.tsx` | Reemplazado por `InteligenciaChatShell` |
 
 ---
 
 ## Detalle por archivo
 
-### `src/actions/inteligencia.ts`
+### `src/lib/inteligencia-types.ts`
+
+Ver sección Tipos compartidos arriba. Solo tipos — sin lógica.
+
+---
+
+### `src/app/api/ai/municipio-context/route.ts` (modificación)
+
+Agrega tres fuentes al contexto existente en la query paralela:
+
+```ts
+import { getProyeccionMunicipios } from "@/actions/proyeccion";
+
+// En la llamada paralela, añadir:
+svc.from("compromisos_seccion").select("compromisos,meta").eq("municipio_id", municipioId),
+svc.from("competencia_municipal").select("riesgo_electoral").eq("municipio_id", municipioId).maybeSingle(),
+getProyeccionMunicipios(),
+```
+
+Calcula cobertura promedio:
+```ts
+const cobRows = cobRes.data ?? [];
+const withMeta = cobRows.filter((r: { meta: number }) => r.meta > 0);
+const coberturaPromedio = withMeta.length > 0
+  ? withMeta.reduce((acc: number, r: { compromisos: number; meta: number }) =>
+      acc + (r.compromisos / r.meta) * 100, 0) / withMeta.length
+  : null;
+const proy = proyecciones.find(p => p.municipio_id === municipioId) ?? null;
+```
+
+Agrega al system prompt (después de la sección de planilla):
+```
+### Proyección electoral
+${proy ? `Puntuación: ${proy.puntuacion}/100 — Nivel: ${proy.nivel}
+  Scores: Historial=${proy.score_historial} Termómetros=${proy.score_termometros} Cobertura=${proy.score_cobertura} Competencia=${proy.score_competencia}` : "Sin proyección calculada."}
+
+### Cobertura de secciones
+${coberturaPromedio !== null ? `Promedio: ${coberturaPromedio.toFixed(1)}% compromisos vs meta (${withMeta.length} secciones con meta asignada)` : "Sin datos de cobertura."}
+
+### Riesgo de competencia
+${compRes.data?.riesgo_electoral ?? "Sin clasificar"}
+```
+
+Limitar historial enviado al LLM (antes de llamar a `streamText`):
+```ts
+const limitedMessages = messages.slice(-8);
+// usar limitedMessages en streamText({ messages: limitedMessages, ... })
+```
+
+---
+
+### `src/app/api/ai/inteligencia/route.ts` (nuevo)
+
+```ts
+import { streamText } from "ai";
+import { MODEL_ANALISIS } from "@/lib/ai";
+import { getUsuarioActual } from "@/actions/auth";
+import { getSituacionGlobal } from "@/actions/situacion";
+
+export async function POST(req: Request) {
+  const usuario = await getUsuarioActual();
+  if (!usuario || !["director", "admin"].includes(usuario.rol)) {
+    return new Response("Unauthorized", { status: 401 });
+  }
+
+  const { messages, municipioIds } = (await req.json()) as {
+    messages: { role: "user" | "assistant"; content: string }[];
+    municipioIds?: number[];
+  };
+
+  const { municipios } = await getSituacionGlobal();
+
+  const scope = municipioIds?.length
+    ? municipios.filter(m => municipioIds.includes(m.id))
+    : municipios.slice(0, 8);
+
+  const contexto = scope.map(m =>
+    `- ${m.nombre}: proyección=${m.proyeccion ?? "N/D"}/100 nivel=${m.proyeccionNivel ?? "?"} ` +
+    `termómetro=${m.avgTermometro?.toFixed(1) ?? "N/D"} ` +
+    `prioridad=${m.prioridad ?? "N/D"} riesgo=${m.riesgo ?? "N/D"} ` +
+    `aspirantes=${m.aspirantesCount} planilla=${m.planillaCount}`
+  ).join("\n");
+
+  const systemPrompt = `Eres un analista político estratégico experto en elecciones municipales del Estado de México.
+Tienes acceso a los datos de los siguientes municipios del sistema SIPEEM:
+
+${contexto}
+
+Para preguntas sobre municipios no incluidos en la lista, indica que no tienes datos cargados para ese municipio.
+Responde siempre en español. Sé conciso y estratégicamente útil. Usa Markdown para respuestas largas.`;
+
+  const result = streamText({
+    model: MODEL_ANALISIS as any,
+    system: systemPrompt,
+    messages: messages.slice(-8),
+    maxOutputTokens: 1500,
+  });
+
+  return result.toUIMessageStreamResponse();
+}
+```
+
+---
+
+### `src/actions/inteligencia.ts` (nuevo)
 
 ```ts
 "use server";
 
-import { generateText } from "ai";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getUsuarioActual } from "./auth";
 import { redirect } from "next/navigation";
-import { getSituacionGlobal } from "./situacion";
-import { MODEL_ANALISIS } from "@/lib/ai";
+import { generateText } from "ai";
+import { MODEL_RAPIDO } from "@/lib/ai";
+import type { Message } from "@/lib/inteligencia-types";
 
-export type Message = { role: "user" | "assistant"; content: string };
-
-async function buildMunicipioContext(municipioId: number): Promise<string> {
-  // Carga datos en paralelo y devuelve string con este formato:
-  // === MUNICIPIO: Ecatepec (ID: 123) ===
-  // PROYECCIÓN: 72/100 — Nivel: alto
-  //   Scores: Historial=50 Termómetros=68 Cobertura=45 Competencia=70
-  // TENDENCIA ML: margen=61.3% R²=0.74 confianza=alta
-  // TERMÓMETROS (0-100): T1(org)=48 T2(competit)=61 T3(presencia)=55 T4(movil)=70 T5(imagen)=71
-  // COBERTURA SECCIONES: 45% promedio (compromisos/meta)
-  // HISTORIAL: 2021=MORENA 54.2% | 2018=PRI 48.1% | 2015=PRI 51.0%
-  // RIESGO COMPETENCIA: extremo
-  // ESTRATEGIA: Prioridad=Crítica Riesgo=Extremo Estatus=En proceso
-  //   Notas ejecutivas: [texto]
-}
-
-async function buildGlobalContext(): Promise<string> {
-  // Usa getSituacionGlobal() → top 5 por urgencyScore
-  // Devuelve string con resumen cross-municipio
-}
-
-export async function guardarAnalisisIA(
+export async function guardarSintesisIA(
   municipioId: number,
-  messages: Message[],
-  generadoPor: string
+  messages: Message[]
 ): Promise<number> {
-  // Formatea messages como texto: "Usuario: ...\nAsistente: ..."
-  // Inserta en briefings: { municipio_id, contenido, generado_por }
-  // Devuelve id del briefing creado
-}
-
-export async function consultarInteligencia(
-  messages: Message[],
-  municipioId?: number
-): Promise<string> {
   const usuario = await getUsuarioActual();
   if (!usuario || !["director", "admin"].includes(usuario.rol)) redirect("/login");
 
-  const contexto = municipioId
-    ? await buildMunicipioContext(municipioId)
-    : await buildGlobalContext();
+  const intercambios = messages
+    .filter(m => m.content.trim())
+    .map(m => `${m.role === "user" ? "Analista" : "IA"}: ${m.content}`)
+    .join("\n\n");
 
-  const systemPrompt = `Eres un analista político experto en elecciones municipales del Estado de México integrado en SIPEEM.
-Tienes acceso a los siguientes datos reales del sistema:
-
-${contexto}
-
-Responde con precisión usando solo los datos proporcionados. Sé directo, usa lenguaje político operativo. En español. Máximo 400 palabras.`;
-
-  const { text } = await generateText({
-    model: MODEL_ANALISIS as any,
-    system: systemPrompt,
-    messages,
-    maxOutputTokens: 1000,
-    temperature: 0.3,
+  const { text: contenido } = await generateText({
+    model: MODEL_RAPIDO as any,
+    system: "Eres un redactor político. Genera un resumen ejecutivo conciso.",
+    prompt: `Resume la siguiente conversación de análisis electoral en un briefing ejecutivo claro y estructurado (máximo 300 palabras). Incluye: tema central, hallazgos clave y recomendaciones mencionadas.\n\n${intercambios}`,
+    maxOutputTokens: 600,
   });
 
-  return text;
+  const svc = createServiceClient();
+  const { data, error } = await svc
+    .from("briefings")
+    .insert({
+      municipio_id: municipioId,
+      contenido: `[Síntesis de análisis IA]\n\n${contenido}`,
+      generado_por: usuario.email,
+    })
+    .select("id")
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data.id;
 }
 ```
 
-### `src/components/inteligencia/ChatPanel.tsx`
+---
 
-Cliente. Props:
+### `src/components/inteligencia/ChatArea.tsx` (nuevo)
+
+Props:
 ```ts
 interface Props {
+  messages: Message[];
+  loading: boolean;
+  onSend: (text: string) => void;
+  suggestions?: string[];
+}
+```
+
+Extrae la UI de `AsistenteChat.tsx` tal como está: lista de mensajes con burbujas user/assistant, textarea con Enter-to-send, botón Send, scroll automático al último mensaje. Solo se abstrae en componente separado — sin cambios visuales.
+
+---
+
+### `src/components/inteligencia/ContextPanel.tsx` (nuevo)
+
+Props:
+```ts
+interface Props {
+  mode: "municipal" | "global";
+  // municipal:
+  kpis?: MunicipioKPIs | null;
+  actoresData?: ActoresData | null;
+  historialData?: HistorialItem[];
+  // global:
+  municipios?: { id: number; nombre: string }[];
+  selectedIds?: number[];
+  onSelectionChange?: (ids: number[]) => void;
+  // común:
+  onGuardar: () => void;
+  canGuardar: boolean;
+  saving: boolean;
+}
+```
+
+Tabs en `mode="municipal"`: **KPIs** (proyección, termómetros T1-T5, cobertura%, riesgo) · **Actores** (comité, planilla top-5, aspirantes top-5) · **Historial** (últimas 3 elecciones)
+
+Tabs en `mode="global"`: **Municipios** (selector con checkboxes, hasta 5; lista los seleccionados con sus KPIs principales) · **Resumen** (urgency ranking)
+
+Botón "Guardar síntesis": deshabilitado cuando `!canGuardar || saving`.
+
+---
+
+### `src/components/inteligencia/InteligenciaChatShell.tsx` (nuevo)
+
+Props:
+```ts
+interface Props {
+  mode: "municipal" | "global";
   municipioId?: number;
-  initialMessages?: Message[];
+  municipios?: { id: number; nombre: string }[];
+  kpis?: MunicipioKPIs | null;
+  actoresData?: ActoresData | null;
+  historialData?: HistorialItem[];
 }
 ```
 
 Estado interno:
 ```ts
-const [messages, setMessages] = useState<Message[]>(initialMessages ?? []);
-const [input, setInput] = useState("");
+const [messages, setMessages] = useState<Message[]>([]);
+const [selectedMunicipioIds, setSelectedMunicipioIds] = useState<number[]>(
+  municipioId ? [municipioId] : []
+);
 const [loading, setLoading] = useState(false);
-const [error, setError] = useState<string | null>(null);
+const [saving, setSaving] = useState(false);
+const [canSave, setCanSave] = useState(false);
 ```
 
-Al enviar:
-1. Push mensaje `user` al array
-2. `setLoading(true)`
-3. Llama `consultarInteligencia(updatedMessages, municipioId)`
-4. Push respuesta como mensaje `assistant`
-5. `setLoading(false)`
-6. Si falla: muestra burbuja de error, el usuario puede reintentar
+Al enviar mensaje:
+1. Push mensaje `{ role: "user", content }` a `messages`
+2. Push `{ role: "assistant", content: "" }` placeholder
+3. `setLoading(true)`
+4. Fetch POST a ruta correcta: `mode === "municipal"` → `/api/ai/municipio-context`; `mode === "global"` → `/api/ai/inteligencia`
+5. Body: `{ messages: updatedMessages, municipioId }` o `{ messages: updatedMessages, municipioIds: selectedMunicipioIds }`
+6. Leer stream (mismo bucle que AsistenteChat actual)
+7. Actualizar último mensaje assistant con texto acumulado
+8. `setLoading(false)`, `setCanSave(true)`
 
-### `src/components/inteligencia/ContextPanel.tsx`
+Al guardar:
+1. `setSaving(true)`
+2. Llama `guardarSintesisIA(municipioId!, messages)`
+3. Toast: "Síntesis guardada en Briefings"
+4. `setSaving(false)`
 
-Cliente. Props:
-```ts
-interface Props {
-  municipios: { id: number; nombre: string }[];
-  municipioId: number | null;
-  onMunicipioChange: (id: number | null) => void;
-  onGuardar: () => void;
-  canGuardar: boolean;   // true cuando hay ≥1 intercambio
-  data: MunicipioContextData | null;  // null cuando no hay municipio seleccionado
-  loading: boolean;
-}
-```
-
-Tabs: KPIs (proyección, ML, termómetros, cobertura, riesgo) · Actores (comité, planilla, aspirantes) · Historial (últimas 3 elecciones).
-
-El botón "Guardar" llama a `guardarAnalisisIA(municipioId, contenido, generadoPor)` — nueva función en `inteligencia.ts` que inserta directamente en la tabla `briefings` con el texto de la conversación formateado como briefing. No llama a `generarBriefing` (que genera su propio contenido desde el LLM).
-
-### `src/app/(protected)/admin/inteligencia/page.tsx`
-
-Server Component. Carga `municipios` activos. Renderiza:
+Layout:
 ```tsx
-<div className="flex h-full">
-  <ContextPanel municipios={municipios} ... />   {/* ~30% */}
-  <ChatPanel ... />                              {/* ~70% */}
+<div className="flex h-full gap-4">
+  <div className="w-72 shrink-0">
+    <ContextPanel ... />
+  </div>
+  <div className="flex-1 min-w-0">
+    <ChatArea ... />
+  </div>
 </div>
 ```
 
-### Tab "IA" en Estrategia Municipal
+---
 
-Dentro del array de tabs existente en `estrategia-municipal/[id]/page.tsx`, agregar:
+### `src/components/actores/ActoresTabs.tsx` (modificación)
+
 ```tsx
-{ key: "ia", label: "Inteligencia IA", content: <ChatPanel municipioId={id} /> }
+// Eliminar:
+import AsistenteChat from "./AsistenteChat";
+
+// Agregar:
+import InteligenciaChatShell from "@/components/inteligencia/InteligenciaChatShell";
+import type { MunicipioKPIs, ActoresData, HistorialItem } from "@/lib/inteligencia-types";
 ```
 
-El `ContextPanel` en esta vista usa `municipioId` fijo y no muestra selector.
+Los datos `kpis`, `actoresData` e `historialData` se construyen inline a partir de las props ya disponibles en `ActoresTabs` (`actores`, `proyeccion`):
 
-### `SidebarNav.tsx`
+```tsx
+const kpis: MunicipioKPIs = {
+  nombre: "...",  // disponible desde la página padre via props o extraído de actores
+  proyeccion: proyeccion ? { puntuacion: proyeccion.puntuacion, nivel: proyeccion.nivel } : null,
+  termometros: actores.termometros
+    ? { term1: actores.termometros.term1, term2: actores.termometros.term2,
+        term3: actores.termometros.term3, term4: actores.termometros.term4,
+        term5: actores.termometros.term5 }
+    : null,
+  coberturaPromedio: null,  // no disponible en props actuales — el servidor ya la manda al LLM
+  riesgoElectoral: actores.competencia?.riesgo_electoral ?? null,
+  estrategia: null,         // no disponible en props actuales de ActoresTabs
+};
+```
+
+Nota: `coberturaPromedio` y `estrategia` no están en las props actuales de `ActoresTabs`. El `ContextPanel` los muestra como "N/D" en el panel visual; la ruta del API sí los tiene. No se requiere cambio en las props de `ActoresTabs` para el MVP.
+
+```tsx
+<TabsContent value="asistente">
+  <InteligenciaChatShell
+    mode="municipal"
+    municipioId={municipioId}
+    kpis={kpis}
+    actoresData={{ comite: actores.comite, planilla: actores.planilla, aspirantes: actores.aspirantes }}
+    historialData={[]}  // historial viene de getMunicipioStrategicFile, no de actores — mostrar vacío
+  />
+</TabsContent>
+```
+
+---
+
+### `src/app/(protected)/admin/inteligencia/page.tsx` (nuevo)
+
+```tsx
+import { createServiceClient } from "@/lib/supabase/service";
+import { getUsuarioActual } from "@/actions/auth";
+import { redirect } from "next/navigation";
+import InteligenciaChatShell from "@/components/inteligencia/InteligenciaChatShell";
+
+export default async function InteligenciaPage() {
+  const usuario = await getUsuarioActual();
+  if (!usuario || !["director", "admin"].includes(usuario.rol)) redirect("/login");
+
+  const svc = createServiceClient();
+  const { data: municipios } = await svc
+    .from("municipios")
+    .select("id, nombre")
+    .eq("estatus", "activo")
+    .order("nombre");
+
+  return (
+    <div className="flex flex-col h-full p-6 gap-4">
+      <div>
+        <h1 className="text-xl font-black text-slate-900 tracking-tight">Inteligencia Electoral</h1>
+        <p className="text-sm text-slate-500 mt-1">Análisis comparativo cross-municipio con IA</p>
+      </div>
+      <div className="flex-1 min-h-0">
+        <InteligenciaChatShell
+          mode="global"
+          municipios={municipios ?? []}
+        />
+      </div>
+    </div>
+  );
+}
+```
+
+---
+
+### `src/components/layout/SidebarNav.tsx` (modificación)
 
 ```tsx
 import { Brain } from "lucide-react";
-// ...
 const isInteligencia = pathname.startsWith("/admin/inteligencia");
-// ...
+
+// Insertar después del link "Sala de Situación":
 <Link href="/admin/inteligencia" className={itemClass(isInteligencia)}>
   <span className={iconClass(isInteligencia, "bg-violet-600/20 text-violet-300")}>
     <Brain className="h-4 w-4" />
@@ -263,62 +487,49 @@ const isInteligencia = pathname.startsWith("/admin/inteligencia");
 
 ---
 
-## Datos que `buildMunicipioContext` carga en paralelo
-
-No reutiliza `getProyeccionMunicipios()` (cargaría los 125 municipios). Hace queries directas:
-
-```ts
-const [termRes, histRes, cobRes, compRes, estRes, comiteRes, planillaRes, aspirantesRes, munRes] =
-  await Promise.all([
-    svc.from("termometros").select("term1,term2,term3,term4,term5").eq("municipio_id", municipioId).maybeSingle(),
-    svc.from("historial_electoral").select("anio,partido_ganador_id,porcentaje_ganador")
-       .eq("municipio_id", municipioId).order("anio", { ascending: false }).limit(3),
-    svc.from("compromisos_seccion").select("compromisos,meta").eq("municipio_id", municipioId),
-    svc.from("competencia_municipal").select("riesgo_electoral").eq("municipio_id", municipioId).maybeSingle(),
-    svc.from("estrategia_municipal").select("prioridad,riesgo,estatus,notas_ejecutivas").eq("municipio_id", municipioId).maybeSingle(),
-    svc.from("comite_municipal").select("presidente,secretario").eq("municipio_id", municipioId).maybeSingle(),
-    svc.from("planilla").select("cargo,nombre").eq("municipio_id", municipioId).order("cargo"),
-    svc.from("aspirantes").select("nombre,cargo_aspirado,partido").eq("municipio_id", municipioId),
-    svc.from("municipios").select("nombre").eq("id", municipioId).single(),
-  ]);
-```
-
-Cobertura promedio: `rows.filter(r => r.meta > 0).reduce(...)` — igual que `proyeccion.ts:56-61`.
-
-La proyección numérica **no se recalcula** en `buildMunicipioContext` para no duplicar lógica compleja. En su lugar el system prompt describe los componentes raw (termómetros, cobertura, historial, competencia) y deja que la IA interprete. Si se requiere la puntuación numérica, `getMunicipioContextData` (función auxiliar en `inteligencia.ts`) puede llamar a `getProyeccionMunicipios()` y filtrar por `municipio_id`.
-
----
-
 ## Manejo de errores
 
 | Escenario | Comportamiento |
 |-----------|---------------|
-| LLM falla | Burbuja de error en chat, conversación puede continuar |
-| Municipio sin datos parciales | System prompt indica "sin datos" por dimensión, IA responde con lo disponible |
-| Modo global sin municipio | Contexto cross-municipio con top-5 por urgency |
-| Guardar sin conversación | Botón deshabilitado |
-| Rol insuficiente | `redirect("/login")` en Server Action |
-| Cambio de municipio | Historial se resetea, contexto nuevo |
+| Streaming falla | Burbuja de error en chat, conversación puede continuar |
+| Municipio sin datos parciales | Ruta indica "sin datos" por dimensión, IA responde con lo disponible |
+| Modo global sin municipios seleccionados | Top-8 por urgency cargado automáticamente |
+| Guardar sin conversación | Botón deshabilitado hasta ≥ 1 intercambio completo |
+| Rol insuficiente | Route Handler devuelve 401; acción devuelve redirect("/login") |
+| Pregunta sobre municipio fuera del contexto global | IA indica que no tiene datos para ese municipio |
+
+---
+
+## Política de contexto
+
+- **Historial al LLM**: `messages.slice(-8)` antes de cada llamada a `streamText`
+- **Municipios en modo global**: máx. 8 automáticos; usuario puede seleccionar hasta 5 explícitos
+- **System prompt**: construido en el servidor siempre — nunca llega del cliente
 
 ---
 
 ## Lo que NO cambia
 
-- Tabla `briefings` (se reutiliza para guardar)
-- `lib/ai.ts` y `MODEL_ANALISIS`
-- Rutas de API existentes
+- `lib/ai.ts` (MODEL_ANALISIS, MODEL_RAPIDO, generateAnalysis)
+- Tabla `briefings` (se reutiliza; síntesis marcada con prefijo `[Síntesis de análisis IA]`)
 - Schema de base de datos (sin nuevas tablas)
 - Dependencias npm
-- Cualquier otra página o acción existente
+- `/api/ai/chat/route.ts`
+- Cualquier otro módulo existente
 
 ---
 
 ## Orden de implementación
 
-1. `src/actions/inteligencia.ts` — `consultarInteligencia` + `buildMunicipioContext` + `buildGlobalContext`
-2. `src/components/inteligencia/ChatPanel.tsx`
-3. `src/components/inteligencia/ContextPanel.tsx`
-4. `src/app/(protected)/admin/inteligencia/page.tsx`
-5. Agregar tab "IA" en `estrategia-municipal/[id]/page.tsx`
-6. Agregar entrada en `SidebarNav.tsx`
-7. Validar end-to-end: seleccionar municipio → preguntar → recibir respuesta → guardar
+1. Crear `src/lib/inteligencia-types.ts`
+2. Enriquecer `src/app/api/ai/municipio-context/route.ts` (cobertura, proyección, competencia, límite 8 msgs)
+3. Crear `src/app/api/ai/inteligencia/route.ts` (modo global)
+4. Crear `src/actions/inteligencia.ts` — `guardarSintesisIA`
+5. Crear `src/components/inteligencia/ChatArea.tsx` (extraer UI de AsistenteChat)
+6. Crear `src/components/inteligencia/ContextPanel.tsx`
+7. Crear `src/components/inteligencia/InteligenciaChatShell.tsx`
+8. Modificar `src/components/actores/ActoresTabs.tsx` — sustituir AsistenteChat
+9. Eliminar `src/components/actores/AsistenteChat.tsx`
+10. Crear `src/app/(protected)/admin/inteligencia/page.tsx`
+11. Modificar `src/components/layout/SidebarNav.tsx`
+12. Validar end-to-end: tab municipal funciona + panel de contexto; vista global responde con contexto cross-municipio; guardar produce síntesis en briefings
