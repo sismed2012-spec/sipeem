@@ -143,18 +143,23 @@ Ver sección Tipos compartidos arriba. Solo tipos — sin lógica.
 
 ### `src/app/api/ai/municipio-context/route.ts` (modificación)
 
-Agrega tres fuentes al contexto existente en la query paralela:
+**No llamar a `getProyeccionMunicipios()`** desde el Route Handler — esa función tiene `redirect()` interno y carga los 125 municipios. En su lugar, calcular la proyección para el municipio específico con una query directa usando el `svc` ya autenticado del Route Handler.
+
+Agrega estas fuentes al contexto existente en la query paralela:
 
 ```ts
-import { getProyeccionMunicipios } from "@/actions/proyeccion";
-
 // En la llamada paralela, añadir:
 svc.from("compromisos_seccion").select("compromisos,meta").eq("municipio_id", municipioId),
 svc.from("competencia_municipal").select("riesgo_electoral").eq("municipio_id", municipioId).maybeSingle(),
-getProyeccionMunicipios(),
+svc.from("historial_electoral").select("partido_ganador_id").eq("municipio_id", municipioId)
+   .order("anio", { ascending: false }).limit(2),
+svc.from("configuracion").select("clave,valor").in("clave", [
+  "proyeccion_peso_historial","proyeccion_peso_termometros",
+  "proyeccion_peso_cobertura","proyeccion_peso_competencia",
+]),
 ```
 
-Calcula cobertura promedio:
+Calcula proyección inline (misma lógica que `proyeccion.ts`):
 ```ts
 const cobRows = cobRes.data ?? [];
 const withMeta = cobRows.filter((r: { meta: number }) => r.meta > 0);
@@ -162,7 +167,16 @@ const coberturaPromedio = withMeta.length > 0
   ? withMeta.reduce((acc: number, r: { compromisos: number; meta: number }) =>
       acc + (r.compromisos / r.meta) * 100, 0) / withMeta.length
   : null;
-const proy = proyecciones.find(p => p.municipio_id === municipioId) ?? null;
+
+// Proyección simplificada (sin pesos configurables para no añadir complejidad):
+const histCount = histRes.data?.length ?? 0;
+const score_historial = histCount >= 2 ? 50 : histCount === 1 ? 40 : 30;
+const score_termometros = t ? (t.term1 + t.term2 + t.term3 + t.term4 + t.term5) / 5 : 50;
+const score_cobertura = coberturaPromedio ?? 0;
+const RIESGO_SCORE: Record<string, number> = { critico: 10, alto: 40, medio: 70, bajo: 100 };
+const score_competencia = RIESGO_SCORE[compRes.data?.riesgo_electoral ?? ""] ?? 50;
+const puntuacion = Math.round((score_historial * 30 + score_termometros * 35 + score_cobertura * 25 + score_competencia * 10) / 100);
+const nivel = puntuacion >= 75 ? "muy_alto" : puntuacion >= 55 ? "alto" : puntuacion >= 35 ? "medio" : "bajo";
 ```
 
 Agrega al system prompt (después de la sección de planilla):
@@ -369,9 +383,21 @@ Al enviar mensaje:
 8. `setLoading(false)`, `setCanSave(true)`
 
 Al guardar:
+- En `mode="municipal"`: llama `guardarSintesisIA(municipioId!, messages)` — `municipioId` siempre definido en este modo.
+- En `mode="global"`: el botón "Guardar" solo está habilitado cuando `selectedMunicipioIds.length === 1`. Si hay 0 o >1 seleccionados, el botón muestra tooltip "Selecciona exactamente un municipio para guardar". Cuando está habilitado, llama `guardarSintesisIA(selectedMunicipioIds[0], messages)`.
+
+```ts
+const effectiveMunicipioId = mode === "municipal"
+  ? municipioId!
+  : selectedMunicipioIds.length === 1 ? selectedMunicipioIds[0] : undefined;
+
+const canActuallySave = canSave && effectiveMunicipioId !== undefined;
+```
+
+Pasos:
 1. `setSaving(true)`
-2. Llama `guardarSintesisIA(municipioId!, messages)`
-3. Toast: "Síntesis guardada en Briefings"
+2. Llama `guardarSintesisIA(effectiveMunicipioId!, messages)`
+3. Toast con `sonner` (ya usado en el proyecto): `toast.success("Síntesis guardada en Briefings")`
 4. `setSaving(false)`
 
 Layout:
@@ -399,11 +425,18 @@ import InteligenciaChatShell from "@/components/inteligencia/InteligenciaChatShe
 import type { MunicipioKPIs, ActoresData, HistorialItem } from "@/lib/inteligencia-types";
 ```
 
-Los datos `kpis`, `actoresData` e `historialData` se construyen inline a partir de las props ya disponibles en `ActoresTabs` (`actores`, `proyeccion`):
+Agregar `nombre: string` a las props de `ActoresTabs` (la página padre ya conoce el nombre — lo obtiene de `getMunicipioStrategicFile` o del listado de municipios):
+
+```tsx
+// En ActoresTabs Props — agregar:
+nombre: string;
+```
+
+Los datos `kpis`, `actoresData` e `historialData` se construyen inline a partir de las props ya disponibles en `ActoresTabs` (`actores`, `proyeccion`, `nombre`):
 
 ```tsx
 const kpis: MunicipioKPIs = {
-  nombre: "...",  // disponible desde la página padre via props o extraído de actores
+  nombre,  // nueva prop
   proyeccion: proyeccion ? { puntuacion: proyeccion.puntuacion, nivel: proyeccion.nivel } : null,
   termometros: actores.termometros
     ? { term1: actores.termometros.term1, term2: actores.termometros.term2,
@@ -425,10 +458,24 @@ Nota: `coberturaPromedio` y `estrategia` no están en las props actuales de `Act
     municipioId={municipioId}
     kpis={kpis}
     actoresData={{ comite: actores.comite, planilla: actores.planilla, aspirantes: actores.aspirantes }}
-    historialData={[]}  // historial viene de getMunicipioStrategicFile, no de actores — mostrar vacío
+    historialData={[]}
   />
 </TabsContent>
 ```
+
+`historialData=[]` porque `ActoresTabs` no recibe datos de historial electoral (vienen de `getMunicipioStrategicFile`, no de `getActoresMunicipio`). El tab "Historial" en `ContextPanel` mostrará un estado vacío explícito cuando `historialData.length === 0`:
+
+```tsx
+{historialData.length === 0 ? (
+  <p className="text-xs text-slate-400 text-center py-4">
+    Historial disponible en la ficha de Estrategia Municipal
+  </p>
+) : (
+  // tabla de elecciones
+)}
+```
+
+No se pasa historial como prop a `ActoresTabs` — el dato ya está disponible para el LLM vía `municipio-context/route.ts` que sí lo carga.
 
 ---
 
