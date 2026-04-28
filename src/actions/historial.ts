@@ -39,6 +39,63 @@ export type HistorialListResult = {
   totalPages: number;
 };
 
+type PartyRow = {
+  id: number;
+  siglas: string;
+  nombre: string;
+  color: string;
+  estatus: "activo" | "inactivo";
+};
+
+type LegacyHeaderRow = {
+  id: number;
+  municipio_id: number;
+  anio: number;
+  votos_ganador: number;
+  porcentaje_ganador: number;
+  fuente?: string | null;
+  notas?: string | null;
+  municipio:
+    | { id: number; nombre: string }
+    | { id: number; nombre: string }[]
+    | null;
+  partido_ganador_data: PartyRow | PartyRow[] | null;
+};
+
+type OfficialHeaderRow = {
+  id: number;
+  municipio_id: number;
+  anio: number;
+  ganador_siglas: string | null;
+  ganador_votacion: number;
+  ganador_porcentaje: number;
+  fuente?: string | null;
+  segundo_siglas?: string | null;
+  segundo_votacion?: number | null;
+  segundo_porcentaje?: number | null;
+  margen_votos?: number | null;
+  margen_porcentual?: number | null;
+  municipio:
+    | { id: number; nombre: string }
+    | { id: number; nombre: string }[]
+    | null;
+};
+
+function normalizeJoin<T>(value: T | T[] | null | undefined): T | null {
+  if (Array.isArray(value)) return value[0] ?? null;
+  return value ?? null;
+}
+
+function fallbackParty(siglas: string | null): PartyRow {
+  return {
+    id: 0,
+    siglas: siglas ?? "N/A",
+    nombre: siglas ?? "N/A",
+    color: "#94a3b8",
+    estatus: "activo",
+  };
+}
+
 export async function getHistorialList(
   filters: GetHistorialListFilters = {}
 ): Promise<HistorialListResult> {
@@ -49,86 +106,207 @@ export async function getHistorialList(
   const page = Math.max(1, filters.page ?? 1);
   const pageSize = HISTORIAL_PAGE_SIZE;
 
-  let query = service
-    .from("historial_electoral")
-    .select(`
-      *,
-      municipio:municipios(id, nombre),
-      partido_ganador_data:partidos(*)
-    `, { count: "exact" })
-    .order("anio", { ascending: false })
-    .order("municipio_id", { ascending: true });
+  const [{ data: parties, error: partiesError }, legacyRes, officialRes] =
+    await Promise.all([
+      service.from("partidos").select("id, siglas, nombre, color, estatus"),
+      service
+        .from("historial_electoral")
+        .select(
+          `
+          id, municipio_id, anio, votos_ganador, porcentaje_ganador, fuente, notas,
+          municipio:municipios(id, nombre),
+          partido_ganador_data:partidos(id, siglas, nombre, color, estatus)
+        `
+        )
+        .order("anio", { ascending: false })
+        .order("municipio_id", { ascending: true }),
+      service
+        .from("historial_municipal_oficial")
+        .select(
+          `
+          id, municipio_id, anio, ganador_siglas, ganador_votacion, ganador_porcentaje, fuente,
+          segundo_siglas, segundo_votacion, segundo_porcentaje, margen_votos, margen_porcentual,
+          municipio:municipios(id, nombre)
+        `
+        )
+        .order("anio", { ascending: false })
+        .order("municipio_id", { ascending: true }),
+    ]);
 
-  if (filters.municipioId) {
-    query = query.eq("municipio_id", filters.municipioId);
-  }
+  if (partiesError) throw new Error(partiesError.message);
+  if (legacyRes.error) throw new Error(legacyRes.error.message);
+  if (officialRes.error) throw new Error(officialRes.error.message);
 
-  if (filters.anio) {
-    query = query.eq("anio", filters.anio);
-  }
+  const partyMap = new Map(
+    ((parties ?? []) as PartyRow[]).map((party) => [party.siglas, party])
+  );
+  const selectedPartyId = filters.partidoGanadorId ?? null;
 
-  if (filters.partidoGanadorId) {
-    query = query.eq("partido_ganador_id", filters.partidoGanadorId);
-  }
+  const legacyRecords = ((legacyRes.data ?? []) as LegacyHeaderRow[]).map((row) => {
+    const municipio = normalizeJoin(row.municipio);
+    const partido = normalizeJoin(row.partido_ganador_data);
+    return {
+      id: row.id,
+      municipio_id: row.municipio_id,
+      anio: row.anio,
+      partido_ganador_id: partido?.id ?? null,
+      votos_ganador: row.votos_ganador,
+      porcentaje_ganador: row.porcentaje_ganador,
+      fuente: row.fuente ?? null,
+      notas: row.notas ?? null,
+      municipio: municipio ? { nombre: municipio.nombre } : undefined,
+      partido_ganador: partido ?? undefined,
+      source: "legacy_municipal" as const,
+      canEdit: true,
+    } satisfies HistorialElectoralDetalle;
+  });
 
-  // Determine search strategy before executing the query.
-  const searchTerm = filters.search?.trim();
-  let yearHandledInDb = false;
-  let textSearchActive = false;
+  const officialRecords = ((officialRes.data ?? []) as OfficialHeaderRow[]).map((row) => {
+    const municipio = normalizeJoin(row.municipio);
+    const partido = row.ganador_siglas
+      ? partyMap.get(row.ganador_siglas) ?? fallbackParty(row.ganador_siglas)
+      : fallbackParty(null);
 
-  if (searchTerm && !filters.anio) {
-    const maybeYear = parseInt(searchTerm, 10);
-    if (!isNaN(maybeYear) && String(maybeYear) === searchTerm) {
-      // 4-digit year: resolve entirely in DB, no in-memory pass needed.
-      query = query.eq("anio", maybeYear);
-      yearHandledInDb = true;
-    } else {
-      // Partido / municipio text search: handled in-memory after fetching all matches.
-      // DB-level .range() is skipped so no results are cut before the filter runs.
-      textSearchActive = true;
+    const segundoPartido = row.segundo_siglas
+      ? partyMap.get(row.segundo_siglas) ?? fallbackParty(row.segundo_siglas)
+      : null;
+
+    return {
+      id: row.id,
+      municipio_id: row.municipio_id,
+      anio: row.anio,
+      partido_ganador_id: partido.id || null,
+      votos_ganador: row.ganador_votacion,
+      porcentaje_ganador: row.ganador_porcentaje,
+      fuente: row.fuente ?? null,
+      notas: "Capa municipal oficial prioritaria",
+      municipio: municipio ? { nombre: municipio.nombre } : undefined,
+      partido_ganador: partido,
+      source: "oficial_municipal" as const,
+      canEdit: false,
+      segundo_lugar: segundoPartido
+        ? {
+            siglas: segundoPartido.siglas,
+            color: segundoPartido.color,
+            votos: row.segundo_votacion ?? 0,
+            porcentaje: row.segundo_porcentaje ?? 0,
+          }
+        : null,
+      margen_votos: row.margen_votos ?? null,
+      margen_porcentual: row.margen_porcentual ?? null,
+    } satisfies HistorialElectoralDetalle;
+  });
+
+  const mergedByKey = new Map<string, HistorialElectoralDetalle>();
+  [...legacyRecords, ...officialRecords].forEach((record) => {
+    const key = `${record.municipio_id}:${record.anio}`;
+    const existing = mergedByKey.get(key);
+    if (!existing || record.source === "oficial_municipal") {
+      mergedByKey.set(key, record);
+    }
+  });
+
+  // Enrich legacy records with second-place data via bulk fetch
+  const legacyIds = Array.from(mergedByKey.values())
+    .filter((r) => r.source === "legacy_municipal" && r.segundo_lugar === undefined)
+    .map((r) => r.id)
+    .filter((id): id is number => typeof id === "number");
+
+  if (legacyIds.length > 0) {
+    const { data: segundos } = await service
+      .from("historial_electoral_resultados")
+      .select("historial_id, votos, porcentaje, partido:partidos(id, siglas, nombre, color)")
+      .in("historial_id", legacyIds)
+      .eq("posicion", 2);
+
+    if (segundos && segundos.length > 0) {
+      const segundoMap = new Map<number, { siglas: string; color: string; votos: number; porcentaje: number }>();
+      for (const row of segundos as Array<{
+        historial_id: number;
+        votos: number;
+        porcentaje: number;
+        partido: { id: number; siglas: string; color: string } | { id: number; siglas: string; color: string }[] | null;
+      }>) {
+        const partido = normalizeJoin(row.partido);
+        if (partido) {
+          segundoMap.set(row.historial_id, {
+            siglas: partido.siglas,
+            color: partido.color,
+            votos: row.votos,
+            porcentaje: row.porcentaje,
+          });
+        }
+      }
+
+      for (const [key, record] of mergedByKey) {
+        if (record.source === "legacy_municipal" && record.id && segundoMap.has(record.id)) {
+          const seg = segundoMap.get(record.id)!;
+          mergedByKey.set(key, {
+            ...record,
+            segundo_lugar: seg,
+            margen_votos: record.votos_ganador - seg.votos,
+            margen_porcentual: record.porcentaje_ganador - seg.porcentaje,
+          });
+        }
+      }
     }
   }
 
-  // Apply DB-level pagination only when all filtering is DB-native.
-  if (!textSearchActive) {
-    const from = (page - 1) * pageSize;
-    query = query.range(from, from + pageSize - 1);
+  let records = Array.from(mergedByKey.values());
+
+  if (filters.municipioId) {
+    records = records.filter((record) => record.municipio_id === filters.municipioId);
   }
 
-  const { data, error, count } = await query;
-  if (error) throw new Error(error.message);
+  if (filters.anio) {
+    records = records.filter((record) => record.anio === filters.anio);
+  }
 
-  let results = (data ?? []).map((row: any) => ({
-    ...row,
-    partido_ganador: row.partido_ganador_data,
-  })) as HistorialElectoralDetalle[];
-
-  // In-memory filter + local pagination for partido / municipio text searches.
-  if (textSearchActive && searchTerm) {
-    const s = searchTerm.toLowerCase();
-    results = results.filter((h) =>
-      (h.municipio?.nombre?.toLowerCase() ?? "").includes(s) ||
-      (h.partido_ganador?.nombre?.toLowerCase() ?? "").includes(s) ||
-      (h.partido_ganador?.siglas?.toLowerCase() ?? "").includes(s)
+  if (selectedPartyId) {
+    records = records.filter(
+      (record) => record.partido_ganador_id === selectedPartyId
     );
-    const total = results.length;
-    const from = (page - 1) * pageSize;
-    return {
-      records: results.slice(from, from + pageSize),
-      total,
-      page,
-      pageSize,
-      totalPages: Math.ceil(total / pageSize),
-    };
   }
 
-  const total = count ?? 0;
+  const searchTerm = filters.search?.trim().toLowerCase();
+  if (searchTerm) {
+    const maybeYear = parseInt(searchTerm, 10);
+    if (!Number.isNaN(maybeYear) && String(maybeYear) === searchTerm) {
+      records = records.filter((record) => record.anio === maybeYear);
+    } else {
+      records = records.filter((record) => {
+        const municipio = record.municipio?.nombre?.toLowerCase() ?? "";
+        const partidoNombre =
+          record.partido_ganador?.nombre?.toLowerCase() ?? "";
+        const partidoSiglas =
+          record.partido_ganador?.siglas?.toLowerCase() ?? "";
+        return (
+          municipio.includes(searchTerm) ||
+          partidoNombre.includes(searchTerm) ||
+          partidoSiglas.includes(searchTerm)
+        );
+      });
+    }
+  }
+
+  records.sort(
+    (a, b) =>
+      b.anio - a.anio ||
+      a.municipio_id - b.municipio_id ||
+      (a.source === "oficial_municipal" ? -1 : 1)
+  );
+
+  const total = records.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const from = (safePage - 1) * pageSize;
+
   return {
-    records: results,
+    records: records.slice(from, from + pageSize),
     total,
-    page,
+    page: safePage,
     pageSize,
-    totalPages: Math.ceil(total / pageSize),
+    totalPages,
   };
 }
 
@@ -140,11 +318,13 @@ export async function getHistorialById(id: number | string) {
 
   const { data: main, error: mainError } = await service
     .from("historial_electoral")
-    .select(`
+    .select(
+      `
       *,
       municipio:municipios(id, nombre),
       partido_ganador_data:partidos(*)
-    `)
+    `
+    )
     .eq("id", id)
     .single();
 
@@ -152,19 +332,27 @@ export async function getHistorialById(id: number | string) {
 
   const { data: results, error: resultsError } = await service
     .from("historial_electoral_resultados")
-    .select(`
+    .select(
+      `
       *,
       partido:partidos(*)
-    `)
+    `
+    )
     .eq("historial_id", id)
     .order("posicion", { ascending: true })
     .order("votos", { ascending: false });
 
   if (resultsError) throw new Error(resultsError.message);
 
+  const mainRow = main as HistorialElectoralDetalle & {
+    partido_ganador_data?: HistorialElectoralDetalle["partido_ganador"];
+  };
+
   return {
-    ...main,
-    partido_ganador: (main as any).partido_ganador_data,
+    ...mainRow,
+    partido_ganador: mainRow.partido_ganador_data,
+    source: "legacy_municipal",
+    canEdit: true,
     resultados: (results ?? []) as (HistorialResultado & {
       partido: HistorialElectoralDetalle["partido_ganador"];
     })[],
@@ -200,13 +388,11 @@ export async function upsertHistorialManual(
     throw new Error("No se pudo resolver la sigla del partido ganador");
   }
 
-  const legacyValue = party.siglas;
-
   const payloadMain = {
     municipio_id: mainData.municipio_id,
     anio: mainData.anio,
     partido_ganador_id: mainData.partido_ganador_id,
-    partido_ganador: legacyValue,
+    partido_ganador: party.siglas,
     votos_ganador: mainData.votos_ganador,
     porcentaje_ganador: mainData.porcentaje_ganador,
     fuente: mainData.fuente || null,

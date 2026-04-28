@@ -23,6 +23,7 @@ type PageProps = {
 export default async function UsuariosPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const usuarioLogueado = await getUsuarioActual();
+  type UsuarioRow = Awaited<ReturnType<typeof getUsuarios>>[number];
 
   // 1. Session and role validation
   if (!usuarioLogueado) {
@@ -34,10 +35,10 @@ export default async function UsuariosPage({ searchParams }: PageProps) {
   }
 
   // 2. Real Data fetching
-  let usuariosList: any[] = [];
+  let usuariosList: UsuarioRow[] = [];
   try {
     usuariosList = await getUsuarios();
-  } catch (e) {
+  } catch (e: unknown) {
     console.error("Error al cargar usuarios:", e);
   }
 

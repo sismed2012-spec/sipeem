@@ -14,7 +14,11 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Plus, Trash2 } from "lucide-react";
 
-type Props = { municipioId: number; secciones: SeccionElectoral[] };
+type Props = {
+  municipioId: number;
+  secciones: SeccionElectoral[];
+  focusedSeccion?: number | null;
+};
 
 const TIPO_COLORS: Record<string, string> = {
   urbana: "bg-blue-50 text-blue-700 border-blue-200",
@@ -22,7 +26,11 @@ const TIPO_COLORS: Record<string, string> = {
   mixta: "bg-amber-50 text-amber-700 border-amber-200",
 };
 
-export default function SeccionesPanel({ municipioId, secciones }: Props) {
+export default function SeccionesPanel({
+  municipioId,
+  secciones,
+  focusedSeccion = null,
+}: Props) {
   const router = useRouter();
   const [showForm, setShowForm] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -80,8 +88,13 @@ export default function SeccionesPanel({ municipioId, secciones }: Props) {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {secciones.map((s) => (
-                <tr key={s.id} className="hover:bg-slate-50 transition-colors">
+              {secciones.map((s) => {
+                const isFocused = focusedSeccion === s.numero;
+                return (
+                <tr
+                  key={s.id}
+                  className={`transition-colors hover:bg-slate-50 ${isFocused ? "bg-amber-50/60" : ""}`}
+                >
                   <td className="px-4 py-2.5 font-semibold text-slate-900">#{s.numero}</td>
                   <td className="px-4 py-2.5">
                     {s.tipo ? (
@@ -96,6 +109,11 @@ export default function SeccionesPanel({ municipioId, secciones }: Props) {
                     {s.lista_nominal ? s.lista_nominal.toLocaleString() : "—"}
                   </td>
                   <td className="px-4 py-2.5 text-right">
+                    {isFocused && (
+                      <Badge variant="outline" className="mr-3 border-amber-200 bg-amber-50 text-[9px] font-bold uppercase text-amber-700">
+                        Objetivo
+                      </Badge>
+                    )}
                     <button
                       onClick={() => handleDelete(s.id)}
                       disabled={deletingId === s.id}
@@ -106,7 +124,7 @@ export default function SeccionesPanel({ municipioId, secciones }: Props) {
                     </button>
                   </td>
                 </tr>
-              ))}
+              )})}
             </tbody>
           </table>
         </div>

@@ -14,8 +14,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
-
 export default function NuevoUsuarioForm() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -41,7 +39,7 @@ export default function NuevoUsuarioForm() {
       } else {
         setError(res.error || "Error desconocido");
       }
-    } catch (err) {
+    } catch {
       setError("Error de conexión con el servidor");
     } finally {
       setLoading(false);

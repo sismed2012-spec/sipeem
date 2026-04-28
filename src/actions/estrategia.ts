@@ -21,7 +21,9 @@ export async function getStrategicOverview(): Promise<StrategicDashboardDTO> {
 
   const { data: municipios, error: munError } = await service
     .from("municipios")
-    .select("id, nombre, distrito, region, estatus")
+    .select(
+      "id, nombre, geo_municipio_id, nombre_oficial_geojson, color, sec_inicio, secciones, regidores, distrito, region, estatus"
+    )
     .eq("estatus", "activo")
     .order("nombre");
 
@@ -56,9 +58,11 @@ export async function getStrategicOverview(): Promise<StrategicDashboardDTO> {
     return { ...m, estrategia: est };
   });
 
+  const municipiosConEstrategia: StrategicDashboardDTO["municipios"] = resultMuns;
+
   return {
     stats,
-    municipios: resultMuns as any,
+    municipios: municipiosConEstrategia,
   };
 }
 

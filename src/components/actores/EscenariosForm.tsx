@@ -17,6 +17,57 @@ type Props = {
 
 type EscKey = keyof Omit<Escenarios, "id" | "municipio_id">;
 
+const FIELD_GUIDANCE: Record<EscKey, { title: string; hint: string; placeholder: string }> = {
+  e1_comp: {
+    title: "Riesgo competitivo detectado",
+    hint: "Describe la señal concreta y dónde está ocurriendo.",
+    placeholder:
+      "Ejemplo: El adversario sube en intención de voto en zona norte (secciones 1123, 1127 y 1131) por narrativa de seguridad.",
+  },
+  e1_rec: {
+    title: "Respuesta táctica inmediata",
+    hint: "Define acción, responsable y plazo de ejecución.",
+    placeholder:
+      "Ejemplo: Activar brigadas focalizadas 10 días, vocería diaria de seguridad y 2 foros vecinales. Responsable: coordinación territorial.",
+  },
+  e2_gen: {
+    title: "Condición general del escenario",
+    hint: "Plantea el contexto de riesgo u oportunidad.",
+    placeholder:
+      "Ejemplo: Se anticipa baja participación de voto blando en colonias periféricas durante la próxima quincena.",
+  },
+  e2_atr: {
+    title: "Acción de atracción y movilización",
+    hint: "Incluye meta operativa medible.",
+    placeholder:
+      "Ejemplo: Contacto casa por casa en 18 secciones con meta semanal de 1,200 contactos y reactivación por llamada.",
+  },
+  e3_gob: {
+    title: "Impacto de gobierno/entorno",
+    hint: "Describe cómo el entorno político afecta la campaña.",
+    placeholder:
+      "Ejemplo: Percepción negativa del gobierno saliente está afectando la marca del partido en segmentos indecisos.",
+  },
+  e3_dem: {
+    title: "Contramedida de posicionamiento",
+    hint: "Redacta la línea de mensaje y ejecución territorial.",
+    placeholder:
+      "Ejemplo: Separar narrativa local con agenda propia de resultados y testimonios ciudadanos en 5 colonias prioritarias.",
+  },
+  e4_niv: {
+    title: "Nivel de riesgo interno",
+    hint: "Especifica bloqueo organizacional o de coordinación.",
+    placeholder:
+      "Ejemplo: Fricción en comité municipal reduce ritmo de operación y retrasa decisiones de activación territorial.",
+  },
+  e4_foco: {
+    title: "Foco de gestión",
+    hint: "Define protocolo de seguimiento y escalamiento.",
+    placeholder:
+      "Ejemplo: Mesa semanal de alineación, KPIs por área y escalamiento en 24h de bloqueos críticos al director regional.",
+  },
+};
+
 const GROUPS: Array<{
   label: string;
   fields: Array<{ key: EscKey; sub: string }>;
@@ -82,13 +133,15 @@ export default function EscenariosForm({ municipioId, initialData }: Props) {
                 {group.fields.map((field) => (
                   <div key={field.key} className="grid gap-1.5">
                     <Label htmlFor={field.key} className="text-slate-600 text-xs">
-                      {field.sub}
+                      {field.sub} · {FIELD_GUIDANCE[field.key].title}
                     </Label>
+                    <p className="text-[11px] text-slate-500">{FIELD_GUIDANCE[field.key].hint}</p>
                     <Textarea
                       id={field.key}
                       name={field.key}
-                      rows={2}
+                      rows={4}
                       defaultValue={initialData?.[field.key] ?? ""}
+                      placeholder={FIELD_GUIDANCE[field.key].placeholder}
                       className="rounded-xl border-slate-200 text-sm resize-none"
                     />
                   </div>

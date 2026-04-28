@@ -1,0 +1,123 @@
+<h2>Layout interior del Motor de Inteligencia</h2>
+<p class="subtitle">Panel izquierdo de contexto + chat a la derecha. ¿Qué datos deben aparecer en el panel?</p>
+
+<div class="cards">
+
+  <div class="card" data-choice="minimal" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0f172a;padding:12px;min-height:180px;display:flex;gap:8px;">
+      <!-- Left panel narrow -->
+      <div style="width:110px;background:#1e293b;border-radius:6px;padding:8px;display:flex;flex-direction:column;gap:5px;font-size:9px;">
+        <div style="color:#94a3b8;font-weight:700;text-transform:uppercase;margin-bottom:2px">Municipio</div>
+        <div style="background:#312e81;border-radius:3px;padding:4px;color:#c7d2fe;font-weight:700">Ecatepec ▾</div>
+        <div style="border-top:1px solid #334155;padding-top:5px;color:#64748b;font-weight:700">RESUMEN</div>
+        <div style="display:flex;justify-content:space-between;color:#e2e8f0"><span>Proyección</span><span style="color:#4ade80;font-weight:700">72</span></div>
+        <div style="display:flex;justify-content:space-between;color:#e2e8f0"><span>Nivel</span><span style="color:#f59e0b;font-weight:700">Alto</span></div>
+        <div style="display:flex;justify-content:space-between;color:#e2e8f0"><span>Riesgo</span><span style="color:#f87171;font-weight:700">Extremo</span></div>
+        <div style="margin-top:auto;background:#4f46e5;border-radius:3px;padding:4px;text-align:center;color:white;font-weight:700">Analizar</div>
+      </div>
+      <!-- Right chat -->
+      <div style="flex:1;background:#1e293b;border-radius:6px;padding:8px;display:flex;flex-direction:column;gap:5px;">
+        <div style="color:#94a3b8;font-size:9px;font-weight:700;text-transform:uppercase">Chat — Ecatepec</div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:4px;">
+          <div style="background:#0f172a;border-radius:4px;padding:5px;color:#cbd5e1;font-size:8px">¿Cuál es el mayor riesgo electoral?</div>
+          <div style="background:#4f46e5;border-radius:4px;padding:5px;color:white;font-size:8px;margin-left:12px">La cobertura en secciones norte está en 28%, muy por debajo de la meta. Esto representa el mayor riesgo táctico...</div>
+          <div style="background:#0f172a;border-radius:4px;padding:5px;color:#cbd5e1;font-size:8px">¿Qué acción tomar esta semana?</div>
+        </div>
+        <div style="background:#0f172a;border-radius:3px;padding:4px;display:flex;align-items:center;gap:4px;">
+          <span style="flex:1;color:#475569;font-size:8px;font-style:italic">Escribe tu pregunta...</span>
+          <span style="background:#4f46e5;border-radius:2px;padding:2px 5px;color:white;font-size:8px">→</span>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Panel mínimo</h3>
+      <p>Solo selector de municipio + KPIs clave (proyección, nivel, riesgo). La IA tiene el contexto completo pero el panel es compacto. <strong>Más espacio para el chat.</strong></p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="rich" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0f172a;padding:12px;min-height:180px;display:flex;gap:8px;">
+      <!-- Left panel rich -->
+      <div style="width:150px;background:#1e293b;border-radius:6px;padding:8px;display:flex;flex-direction:column;gap:4px;font-size:9px;">
+        <div style="color:#94a3b8;font-weight:700;text-transform:uppercase;margin-bottom:2px">Municipio</div>
+        <div style="background:#312e81;border-radius:3px;padding:4px;color:#c7d2fe;font-weight:700">Ecatepec ▾</div>
+        <div style="border-top:1px solid #334155;padding-top:4px;color:#64748b;font-weight:700">PROYECCIÓN</div>
+        <div style="display:flex;justify-content:space-between;color:#e2e8f0"><span>Puntuación</span><span style="color:#4ade80;font-weight:700">72/100</span></div>
+        <div style="display:flex;justify-content:space-between;color:#e2e8f0"><span>Tendencia ML</span><span style="color:#60a5fa;font-weight:700">61.3%</span></div>
+        <div style="border-top:1px solid #334155;padding-top:4px;color:#64748b;font-weight:700">TERMÓMETROS</div>
+        <div style="display:flex;justify-content:space-between;color:#e2e8f0"><span>T1 Org.</span><span style="color:#fb923c">48</span></div>
+        <div style="display:flex;justify-content:space-between;color:#e2e8f0"><span>T5 Imagen</span><span style="color:#4ade80">71</span></div>
+        <div style="border-top:1px solid #334155;padding-top:4px;color:#64748b;font-weight:700">ACTORES</div>
+        <div style="color:#94a3b8">3 aspirantes · 12 planilla</div>
+        <div style="color:#94a3b8">Comité: Ramírez / López</div>
+        <div style="border-top:1px solid #334155;padding-top:4px;color:#64748b;font-weight:700">COBERTURA</div>
+        <div style="background:#ef4444;border-radius:2px;height:4px;margin-bottom:2px">
+          <div style="background:#10b981;border-radius:2px;height:4px;width:45%"></div>
+        </div>
+        <div style="color:#f87171">45% · 120/267 secc.</div>
+      </div>
+      <!-- Right chat -->
+      <div style="flex:1;background:#1e293b;border-radius:6px;padding:8px;display:flex;flex-direction:column;gap:5px;">
+        <div style="color:#94a3b8;font-size:9px;font-weight:700;text-transform:uppercase">Chat — Ecatepec</div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:4px;">
+          <div style="background:#0f172a;border-radius:4px;padding:5px;color:#cbd5e1;font-size:8px">¿Cuál es el mayor riesgo electoral?</div>
+          <div style="background:#4f46e5;border-radius:4px;padding:5px;color:white;font-size:8px;margin-left:8px">La cobertura al 45% y el T1 en 48 señalan fragilidad organizacional...</div>
+        </div>
+        <div style="background:#0f172a;border-radius:3px;padding:4px;display:flex;align-items:center;gap:4px;">
+          <span style="flex:1;color:#475569;font-size:8px;font-style:italic">Escribe tu pregunta...</span>
+          <span style="background:#4f46e5;border-radius:2px;padding:2px 5px;color:white;font-size:8px">→</span>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — Panel rico</h3>
+      <p>Panel izquierdo con proyección, termómetros, actores y cobertura visibles. El usuario ve los datos crudos mientras chatea. Más informativo, <strong>más denso.</strong></p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="tabs" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0f172a;padding:12px;min-height:180px;display:flex;gap:8px;">
+      <!-- Left panel with tabs -->
+      <div style="width:140px;background:#1e293b;border-radius:6px;padding:8px;display:flex;flex-direction:column;gap:4px;font-size:9px;">
+        <div style="background:#312e81;border-radius:3px;padding:4px;color:#c7d2fe;font-weight:700">Ecatepec ▾</div>
+        <div style="display:flex;gap:2px;margin-top:2px;">
+          <div style="background:#4f46e5;border-radius:3px 3px 0 0;padding:3px 6px;color:white;font-weight:700">KPIs</div>
+          <div style="background:#0f172a;border-radius:3px 3px 0 0;padding:3px 6px;color:#64748b">Actores</div>
+          <div style="background:#0f172a;border-radius:3px 3px 0 0;padding:3px 6px;color:#64748b">Hist.</div>
+        </div>
+        <div style="background:#0f172a;border-radius:0 4px 4px 4px;padding:6px;display:flex;flex-direction:column;gap:3px;">
+          <div style="display:flex;justify-content:space-between;color:#e2e8f0"><span>Proyección</span><span style="color:#4ade80;font-weight:700">72</span></div>
+          <div style="display:flex;justify-content:space-between;color:#e2e8f0"><span>ML Tend.</span><span style="color:#60a5fa;font-weight:700">61%</span></div>
+          <div style="display:flex;justify-content:space-between;color:#e2e8f0"><span>Cobertura</span><span style="color:#f87171;font-weight:700">45%</span></div>
+          <div style="display:flex;justify-content:space-between;color:#e2e8f0"><span>Avg Term.</span><span style="color:#fb923c;font-weight:700">56.4</span></div>
+          <div style="display:flex;justify-content:space-between;color:#e2e8f0"><span>Riesgo</span><span style="color:#f87171;font-weight:700">Extremo</span></div>
+        </div>
+        <div style="margin-top:auto">
+          <div style="display:flex;gap:2px;">
+            <div style="flex:1;background:#4f46e5;border-radius:3px;padding:3px;text-align:center;color:white;font-weight:700">Analizar</div>
+            <div style="background:#1e293b;border:1px solid #334155;border-radius:3px;padding:3px;text-align:center;color:#94a3b8">💾</div>
+          </div>
+        </div>
+      </div>
+      <!-- Right chat -->
+      <div style="flex:1;background:#1e293b;border-radius:6px;padding:8px;display:flex;flex-direction:column;gap:5px;">
+        <div style="color:#94a3b8;font-size:9px;font-weight:700;text-transform:uppercase">Análisis IA — Ecatepec</div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:4px;">
+          <div style="background:#0f172a;border-radius:4px;padding:5px;color:#cbd5e1;font-size:8px">¿Cuál es el mayor riesgo?</div>
+          <div style="background:#4f46e5;border-radius:4px;padding:5px;color:white;font-size:8px;margin-left:8px">T1 en 48 y cobertura al 45% — fragilidad estructural...</div>
+          <div style="background:#0f172a;border-radius:4px;padding:5px;color:#cbd5e1;font-size:8px">Simula +15% cobertura</div>
+          <div style="background:#4f46e5;border-radius:4px;padding:5px;color:white;font-size:8px;margin-left:8px">Proyección subiría de 72 → 81, nivel muy_alto...</div>
+        </div>
+        <div style="background:#0f172a;border-radius:3px;padding:4px;display:flex;align-items:center;gap:4px;">
+          <span style="flex:1;color:#475569;font-size:8px;font-style:italic">Escribe o pregunta algo...</span>
+          <span style="background:#4f46e5;border-radius:2px;padding:2px 5px;color:white;font-size:8px">→</span>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — Panel con tabs KPIs / Actores / Historial</h3>
+      <p>Panel izquierdo organizado en pestañas. El usuario elige qué datos ver mientras chatea. Botón "Guardar análisis" integrado. <strong>Equilibrio entre densidad y orden.</strong></p>
+    </div>
+  </div>
+
+</div>

@@ -19,18 +19,73 @@ import CompromisosPanel from "./CompromisosPanel";
 import CompetenciaForm from "./CompetenciaForm";
 import ProyeccionPanel from "./ProyeccionPanel";
 import type { ProyeccionMunicipio } from "@/actions/proyeccion";
-import AsistenteChat from "./AsistenteChat";
 import TermometrosDiagnostico from "./TermometrosDiagnostico";
 import PulsoDigitalPanel from "./PulsoDigitalPanel";
+import InteligenciaChatShell from "@/components/inteligencia/InteligenciaChatShell";
+import type {
+  ActoresData,
+  HistorialItem,
+  MunicipioKPIs,
+} from "@/lib/inteligencia-types";
 
 type Props = {
   municipioId: number;
+  nombre: string;
   actores: ActoresMunicipioData;
   proyeccion: ProyeccionMunicipio | null;
   children: ReactNode;
 };
 
-export default function ActoresTabs({ municipioId, actores, proyeccion, children }: Props) {
+export default function ActoresTabs({
+  municipioId,
+  nombre,
+  actores,
+  proyeccion,
+  children,
+}: Props) {
+  const kpis: MunicipioKPIs = {
+    nombre,
+    proyeccion: proyeccion
+      ? {
+          puntuacion: proyeccion.puntuacion,
+          nivel: proyeccion.nivel,
+        }
+      : null,
+    termometros: actores.termometros
+      ? {
+          term1: actores.termometros.term1,
+          term2: actores.termometros.term2,
+          term3: actores.termometros.term3,
+          term4: actores.termometros.term4,
+          term5: actores.termometros.term5,
+        }
+      : null,
+    coberturaPromedio: null,
+    riesgoElectoral: actores.competencia?.riesgo_electoral ?? null,
+    estrategia: null,
+  };
+
+  const actoresData: ActoresData = {
+    comite: actores.comite
+      ? {
+          presidente: actores.comite.presidente,
+          secretario: actores.comite.secretario,
+        }
+      : null,
+    planilla: actores.planilla.map((item) => ({
+      cargo: item.cargo,
+      nombre: item.nombre,
+      partido: item.partido,
+    })),
+    aspirantes: actores.aspirantes.map((item) => ({
+      nombre: item.nombre,
+      cargo_aspirado: item.cargo_aspirado,
+      partido: item.partido,
+    })),
+  };
+
+  const historialData: HistorialItem[] = [];
+
   return (
     <Tabs defaultValue="estrategia" className="space-y-6">
       <TabsList className="w-full h-auto flex-wrap gap-1 rounded-2xl p-1.5">
@@ -95,7 +150,13 @@ export default function ActoresTabs({ municipioId, actores, proyeccion, children
       </TabsContent>
 
       <TabsContent value="asistente">
-        <AsistenteChat municipioId={municipioId} />
+        <InteligenciaChatShell
+          mode="municipal"
+          municipioId={municipioId}
+          kpis={kpis}
+          actoresData={actoresData}
+          historialData={historialData}
+        />
       </TabsContent>
 
       <TabsContent value="pulso">

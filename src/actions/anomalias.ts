@@ -22,6 +22,21 @@ export type ReporteAnomalias = {
   generado_at: string;
 };
 
+type HistorialAnomaliaRow = {
+  municipio_id: number;
+  anio: number;
+  porcentaje_ganador: number;
+  municipios: { nombre: string }[] | null;
+};
+
+function normalizeJoin<T>(value: T | T[] | null | undefined): T | null {
+  if (Array.isArray(value)) {
+    return value[0] ?? null;
+  }
+
+  return value ?? null;
+}
+
 export async function detectarAnomalias(): Promise<ReporteAnomalias> {
   const usuario = await getUsuarioActual();
   if (!usuario || !["director", "admin"].includes(usuario.rol)) redirect("/login");
@@ -38,10 +53,12 @@ export async function detectarAnomalias(): Promise<ReporteAnomalias> {
 
   // Group by municipio
   const byMunicipio = new Map<number, { nombre: string; records: { anio: number; pct: number }[] }>();
-  for (const row of historial ?? []) {
+  for (const row of (historial ?? []) as HistorialAnomaliaRow[]) {
     if (!byMunicipio.has(row.municipio_id)) {
       byMunicipio.set(row.municipio_id, {
-        nombre: (row.municipios as any)?.nombre ?? `Municipio ${row.municipio_id}`,
+        nombre:
+          normalizeJoin(row.municipios)?.nombre ??
+          `Municipio ${row.municipio_id}`,
         records: [],
       });
     }

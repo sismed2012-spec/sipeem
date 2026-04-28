@@ -1,0 +1,91 @@
+<h2>Leyenda de cobertura en el mapa</h2>
+<p class="subtitle">Aparece solo cuando el overlay de Secciones está activo. ¿Cuál posición y estilo prefieres?</p>
+
+<div class="cards">
+
+  <!-- Opción A: Badge compacto bottom-left -->
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#1e293b;padding:0;position:relative;min-height:200px;overflow:hidden">
+      <!-- Mapa simulado -->
+      <svg width="100%" height="200" viewBox="0 0 320 200" style="display:block">
+        <rect width="320" height="200" fill="#0f172a"/>
+        <!-- Secciones simuladas con colores -->
+        <polygon points="80,40 120,20 160,40 160,80 120,100 80,80" fill="#ef4444" stroke="#1e293b" stroke-width="1.5" opacity="0.85"/>
+        <polygon points="160,40 200,20 240,40 240,80 200,100 160,80" fill="#f59e0b" stroke="#1e293b" stroke-width="1.5" opacity="0.85"/>
+        <polygon points="120,100 160,80 200,100 200,140 160,160 120,140" fill="#3b82f6" stroke="#1e293b" stroke-width="1.5" opacity="0.85"/>
+        <polygon points="80,80 120,60 160,80 160,120 120,140 80,120" fill="#10b981" stroke="#1e293b" stroke-width="1.5" opacity="0.85"/>
+        <polygon points="200,80 240,60 280,80 280,120 240,140 200,120" fill="#475569" stroke="#1e293b" stroke-width="1.5" opacity="0.85"/>
+        <polygon points="40,100 80,80 120,100 120,140 80,160 40,140" fill="#3b82f6" stroke="#1e293b" stroke-width="1.5" opacity="0.85"/>
+        <polygon points="160,120 200,100 240,120 240,160 200,180 160,160" fill="#ef4444" stroke="#1e293b" stroke-width="1.5" opacity="0.85"/>
+        <!-- Leyenda bottom-left compacta -->
+        <rect x="8" y="130" width="130" height="64" rx="6" fill="#1e293b" opacity="0.97" stroke="#334155" stroke-width="1"/>
+        <text x="14" y="144" fill="#94a3b8" font-size="8" font-weight="700" letter-spacing="0.08em">COBERTURA</text>
+        <!-- items -->
+        <rect x="14" y="150" width="8" height="8" rx="2" fill="#ef4444"/>
+        <text x="26" y="158" fill="#e2e8f0" font-size="8">0–33% Crítico</text>
+        <rect x="14" y="161" width="8" height="8" rx="2" fill="#f59e0b"/>
+        <text x="26" y="169" fill="#e2e8f0" font-size="8">34–66% En progreso</text>
+        <rect x="14" y="172" width="8" height="8" rx="2" fill="#3b82f6"/>
+        <text x="26" y="180" fill="#e2e8f0" font-size="8">67–99% Avanzado</text>
+        <rect x="74" y="150" width="8" height="8" rx="2" fill="#10b981"/>
+        <text x="86" y="158" fill="#e2e8f0" font-size="8">100% Completado</text>
+        <rect x="74" y="161" width="8" height="8" rx="2" fill="#475569"/>
+        <text x="86" y="169" fill="#e2e8f0" font-size="8">Sin meta asignada</text>
+      </svg>
+    </div>
+    <div class="card-body">
+      <h3>A — Badge compacto inferior-izquierda</h3>
+      <p>Panel oscuro pequeño, esquina inferior izquierda del mapa. No tapa los polígonos del centro.</p>
+    </div>
+  </div>
+
+  <!-- Opción B: Integrado en LayerPanel -->
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#1e293b;padding:0;position:relative;min-height:200px;overflow:hidden">
+      <svg width="100%" height="200" viewBox="0 0 320 200" style="display:block">
+        <rect width="320" height="200" fill="#0f172a"/>
+        <!-- Secciones -->
+        <polygon points="60,40 100,20 140,40 140,80 100,100 60,80" fill="#ef4444" stroke="#1e293b" stroke-width="1.5" opacity="0.85"/>
+        <polygon points="140,40 180,20 220,40 220,80 180,100 140,80" fill="#f59e0b" stroke="#1e293b" stroke-width="1.5" opacity="0.85"/>
+        <polygon points="100,100 140,80 180,100 180,140 140,160 100,140" fill="#10b981" stroke="#1e293b" stroke-width="1.5" opacity="0.85"/>
+        <polygon points="60,80 100,60 140,80 140,120 100,140 60,120" fill="#3b82f6" stroke="#1e293b" stroke-width="1.5" opacity="0.85"/>
+        <polygon points="180,80 220,60 260,80 260,120 220,140 180,120" fill="#475569" stroke="#1e293b" stroke-width="1.5" opacity="0.85"/>
+        <!-- Panel derecho tipo LayerPanel -->
+        <rect x="256" y="8" width="56" height="184" rx="6" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+        <text x="261" y="22" fill="#94a3b8" font-size="7" font-weight="700" letter-spacing="0.08em">CAPAS</text>
+        <!-- Capa Municipio -->
+        <rect x="261" y="27" width="8" height="8" rx="2" fill="#3b82f6"/>
+        <text x="272" y="35" fill="#e2e8f0" font-size="7">Municipio</text>
+        <!-- Sección active -->
+        <rect x="261" y="38" width="8" height="8" rx="2" fill="#10b981"/>
+        <text x="272" y="46" fill="#10b981" font-size="7" font-weight="600">Sección ●</text>
+        <!-- Divider -->
+        <line x1="261" y1="54" x2="308" y2="54" stroke="#334155" stroke-width="1"/>
+        <!-- Leyenda integrada -->
+        <text x="261" y="65" fill="#64748b" font-size="6.5" font-weight="700" letter-spacing="0.06em">COBERTURA</text>
+        <rect x="261" y="69" width="7" height="7" rx="1.5" fill="#ef4444"/>
+        <text x="271" y="76" fill="#94a3b8" font-size="6.5">0–33%</text>
+        <rect x="261" y="79" width="7" height="7" rx="1.5" fill="#f59e0b"/>
+        <text x="271" y="86" fill="#94a3b8" font-size="6.5">34–66%</text>
+        <rect x="261" y="89" width="7" height="7" rx="1.5" fill="#3b82f6"/>
+        <text x="271" y="96" fill="#94a3b8" font-size="6.5">67–99%</text>
+        <rect x="261" y="99" width="7" height="7" rx="1.5" fill="#10b981"/>
+        <text x="271" y="106" fill="#94a3b8" font-size="6.5">100%</text>
+        <rect x="261" y="109" width="7" height="7" rx="1.5" fill="#475569"/>
+        <text x="271" y="116" fill="#94a3b8" font-size="6.5">Sin meta</text>
+      </svg>
+    </div>
+    <div class="card-body">
+      <h3>B — Integrada en el LayerPanel existente</h3>
+      <p>La leyenda aparece debajo del toggle de Sección cuando está activa. Todo en un solo panel, sin elementos flotantes extra.</p>
+    </div>
+  </div>
+
+</div>
+
+<div class="section" style="margin-top:16px;background:#1e293b;border-radius:8px;padding:12px">
+  <p style="font-size:12px;color:#94a3b8;margin:0">
+    En ambos casos la leyenda <strong style="color:#f8fafc">solo aparece cuando el overlay de Secciones está activo</strong>.
+    Al desactivarlo, desaparece junto con los polígonos.
+  </p>
+</div>

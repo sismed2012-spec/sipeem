@@ -16,17 +16,74 @@ export async function GET(req: NextRequest) {
   const anio = searchParams.get("anio");
 
   const svc = createServiceClient();
-  let query = svc
-    .from("historial_electoral")
-    .select("municipio_id, anio, porcentaje_ganador, municipios(nombre)")
-    .order("anio", { ascending: false })
-    .limit(500);
+  const municipioIdValue = municipioId ? parseInt(municipioId, 10) : undefined;
+  const anioValue = anio ? parseInt(anio, 10) : undefined;
 
-  if (municipioId) query = query.eq("municipio_id", parseInt(municipioId, 10));
-  if (anio) query = query.eq("anio", parseInt(anio, 10));
+  const [legacyRes, officialRes] = await Promise.all([
+    svc
+      .from("historial_electoral")
+      .select(
+        "id, municipio_id, anio, porcentaje_ganador, votos_ganador, municipios(nombre), partidos!partido_ganador_id(siglas)"
+      )
+      .order("anio", { ascending: false })
+      .limit(500)
+      .match({
+        ...(municipioIdValue ? { municipio_id: municipioIdValue } : {}),
+        ...(anioValue ? { anio: anioValue } : {}),
+      }),
+    svc
+      .from("historial_municipal_oficial")
+      .select(
+        "id, municipio_id, anio, ganador_porcentaje, ganador_votacion, ganador_siglas, municipios(nombre)"
+      )
+      .order("anio", { ascending: false })
+      .limit(500)
+      .match({
+        ...(municipioIdValue ? { municipio_id: municipioIdValue } : {}),
+        ...(anioValue ? { anio: anioValue } : {}),
+      }),
+  ]);
 
-  const { data, error } = await query;
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (legacyRes.error) {
+    return NextResponse.json({ error: legacyRes.error.message }, { status: 500 });
+  }
+  if (officialRes.error) {
+    return NextResponse.json({ error: officialRes.error.message }, { status: 500 });
+  }
+
+  const merged = new Map<string, Record<string, unknown>>();
+
+  (legacyRes.data ?? []).forEach((row) => {
+    const legacyPartySiglas = Array.isArray(row.partidos)
+      ? row.partidos[0]?.siglas ?? null
+      : (row.partidos as { siglas?: string } | null)?.siglas ?? null;
+
+    merged.set(`${row.municipio_id}:${row.anio}`, {
+      municipio_id: row.municipio_id,
+      anio: row.anio,
+      porcentaje_ganador: row.porcentaje_ganador,
+      votos_ganador: row.votos_ganador,
+      ganador_siglas: legacyPartySiglas,
+      municipios: row.municipios,
+      source: "legacy_municipal",
+    });
+  });
+
+  (officialRes.data ?? []).forEach((row) => {
+    merged.set(`${row.municipio_id}:${row.anio}`, {
+      municipio_id: row.municipio_id,
+      anio: row.anio,
+      porcentaje_ganador: row.ganador_porcentaje,
+      votos_ganador: row.ganador_votacion,
+      ganador_siglas: row.ganador_siglas,
+      municipios: row.municipios,
+      source: "oficial_municipal",
+    });
+  });
+
+  const data = Array.from(merged.values()).sort(
+    (a, b) => Number(b.anio) - Number(a.anio)
+  );
 
   return NextResponse.json({
     data,

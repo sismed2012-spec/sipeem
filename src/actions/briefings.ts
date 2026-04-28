@@ -20,13 +20,15 @@ export async function generarBriefing(municipioId: number): Promise<number> {
   const nombre = electoral?.summary?.nombre ?? `Municipio ${municipioId}`;
   const timeline = electoral?.timeline?.slice(0, 3) ?? [];
   const t = actores.termometros;
+  const esc = actores.escenarios;
 
   const prompt = `Genera un briefing estratégico ejecutivo para el municipio de ${nombre}, Estado de México.
 
 DATOS DISPONIBLES:
 - Estrategia: Prioridad ${estrategia?.prioridad ?? "N/D"}, Riesgo ${estrategia?.riesgo ?? "N/D"}, Oportunidad ${estrategia?.oportunidad ?? "N/D"}, Estatus ${estrategia?.estatus ?? "N/D"}
 - Historial reciente: ${timeline.map((h) => `${h.anio}: ${h.winnerSiglas} ${h.porcentaje?.toFixed(1) ?? "?"}%`).join(", ") || "Sin datos"}
-- Termómetros: ${t ? `T1=${t.term1} T2=${t.term2} T3=${t.term3} T4=${t.term4} T5=${t.term5} (promedio ${((t.term1 + t.term2 + t.term3 + t.term4 + t.term5) / 5).toFixed(1)})` : "Sin datos"}
+- Termómetros: ${t ? `Fortaleza organizacional interna=${t.term1}; Competitividad electoral percibida=${t.term2}; Presencia territorial y cobertura=${t.term3}; Movilización y activismo=${t.term4}; Imagen pública del candidato/partido=${t.term5} (promedio ${((t.term1 + t.term2 + t.term3 + t.term4 + t.term5) / 5).toFixed(1)})` : "Sin datos"}
+- Escenarios: ${esc ? `E1 Riesgo=${esc.e1_comp || "Sin registrar"}; E1 Respuesta=${esc.e1_rec || "Sin registrar"}; E2 Condición=${esc.e2_gen || "Sin registrar"}; E2 Acción=${esc.e2_atr || "Sin registrar"}; E3 Entorno=${esc.e3_gob || "Sin registrar"}; E3 Contramedida=${esc.e3_dem || "Sin registrar"}; E4 Riesgo interno=${esc.e4_niv || "Sin registrar"}; E4 Gestión=${esc.e4_foco || "Sin registrar"}` : "Sin datos"}
 - Comité: ${actores.comite ? `${actores.comite.presidente} / ${actores.comite.secretario}` : "Sin registrar"}
 - Aspirantes: ${actores.aspirantes.length} registrados
 - Planilla: ${actores.planilla.length} integrantes

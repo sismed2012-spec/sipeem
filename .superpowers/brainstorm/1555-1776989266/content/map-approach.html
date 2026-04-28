@@ -1,0 +1,40 @@
+<h2>¿Cómo integrar ArcGIS en la página /mapa?</h2>
+<p class="subtitle">Tienes 5 capas reales en ArcGIS. ¿Qué rol deben jugar en el mapa?</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Datos ArcGIS + mapa actual sin cambios visuales</h3>
+      <p>El mapa sigue siendo el mismo (SVG/canvas con GeoJSON). Los Server Actions y el panel de análisis consumen ArcGIS para enriquecer datos: distritos federales, locales, secciones electorales — sin tocar la UI del mapa.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>A favor</h4><ul><li>Cero cambio visual — no hay riesgo de regresión</li><li>Más rápido de implementar</li><li>Sin dependencia de @arcgis/core (~1.5 MB)</li></ul></div>
+        <div class="cons"><h4>En contra</h4><ul><li>No aprovecha la geometría de ArcGIS en el mapa visual</li><li>El GeoJSON local de municipios queda duplicado con los datos de ArcGIS</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Reemplazar GeoJSON local con datos de ArcGIS</h3>
+      <p>El mapa visual sigue siendo el mismo componente, pero en vez de leer el archivo estático <code>edomex_municipios_wgs84.geojson</code> del disco, obtiene la geometría de la capa MUNICIPIO (layer 3) de ArcGIS vía la API. Las otras 4 capas (DISTRITO_FEDERAL, DISTRITO_LOCAL, ENTIDAD, SECCION) quedan disponibles en el panel lateral o como overlays.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>A favor</h4><ul><li>Una sola fuente de verdad geoespacial (ArcGIS)</li><li>El GeoJSON local queda obsoleto</li><li>Se pueden activar/desactivar capas en el mapa</li></ul></div>
+        <div class="cons"><h4>En contra</h4><ul><li>Las secciones son 7052 features — carga pesada si se piden sin filtro</li><li>Necesita paginación o filtros por municipio seleccionado</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Visor ArcGIS nativo (@arcgis/core) + mapa Esri</h3>
+      <p>Reemplazar el mapa actual con un componente cliente que usa <code>@arcgis/core</code> — el SDK oficial de Esri. El mapa de ArcGIS Online maneja tiles, simbología, zoom, popups y las 5 capas nativas. SIPEEM controla autenticación y los datos de negocio (Supabase).</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>A favor</h4><ul><li>Mapa profesional con tiles satelitales, calles, topo</li><li>Simbología por escala (municipios → secciones al hacer zoom)</li><li>Popups nativos ArcGIS enriquecidos con datos Supabase</li></ul></div>
+        <div class="cons"><h4>En contra</h4><ul><li>+1.5 MB al bundle del cliente</li><li>Requiere configuración adicional de webpack/turbopack (módulos WASM de Esri)</li><li>Mayor complejidad de implementación</li></ul></div>
+      </div>
+    </div>
+  </div>
+</div>

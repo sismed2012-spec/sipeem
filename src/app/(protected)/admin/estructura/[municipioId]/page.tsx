@@ -9,11 +9,21 @@ import PromotoresPanel from "@/components/estructura/PromotoresPanel";
 import CoberturaChart from "@/components/estructura/CoberturaChart";
 import { ArrowLeft, Map, Users, TrendingUp } from "lucide-react";
 
-type Props = { params: Promise<{ municipioId: string }> };
+type Props = {
+  params: Promise<{ municipioId: string }>;
+  searchParams?: Promise<{ seccion?: string }>;
+};
 
-export default async function EstructuraMunicipioPage({ params }: Props) {
+export default async function EstructuraMunicipioPage({
+  params,
+  searchParams,
+}: Props) {
   const { municipioId: municipioIdStr } = await params;
+  const resolvedSearch = searchParams ? await searchParams : undefined;
   const municipioId = parseInt(municipioIdStr);
+  const focusedSeccion = resolvedSearch?.seccion
+    ? parseInt(resolvedSearch.seccion, 10)
+    : null;
   if (isNaN(municipioId)) notFound();
 
   const svc = createServiceClient();
@@ -97,7 +107,15 @@ export default async function EstructuraMunicipioPage({ params }: Props) {
 
           <TabsContent value="secciones">
             <Card className="border-none shadow-sm bg-white p-6">
-              <SeccionesPanel municipioId={municipioId} secciones={secciones} />
+              <SeccionesPanel
+                municipioId={municipioId}
+                secciones={secciones}
+                focusedSeccion={
+                  focusedSeccion && !isNaN(focusedSeccion)
+                    ? focusedSeccion
+                    : null
+                }
+              />
             </Card>
           </TabsContent>
 

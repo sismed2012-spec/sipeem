@@ -5,11 +5,21 @@ import { ChevronLeft } from "lucide-react";
 import { notFound } from "next/navigation";
 import CampoSeccionesForm from "./CampoSeccionesForm";
 
-type Props = { params: Promise<{ municipioId: string }> };
+type Props = {
+  params: Promise<{ municipioId: string }>;
+  searchParams?: Promise<{ seccion?: string }>;
+};
 
-export default async function CampoSeccionesPage({ params }: Props) {
+export default async function CampoSeccionesPage({
+  params,
+  searchParams,
+}: Props) {
   const { municipioId } = await params;
+  const resolvedSearch = searchParams ? await searchParams : undefined;
   const id = parseInt(municipioId, 10);
+  const focusedSeccion = resolvedSearch?.seccion
+    ? parseInt(resolvedSearch.seccion, 10)
+    : null;
   if (isNaN(id)) return notFound();
 
   const svc = createServiceClient();
@@ -49,6 +59,9 @@ export default async function CampoSeccionesPage({ params }: Props) {
           municipioId={id}
           secciones={secciones}
           initialCounts={Object.fromEntries(latestBySeccion)}
+          focusedSeccion={
+            focusedSeccion && !isNaN(focusedSeccion) ? focusedSeccion : null
+          }
           registrar={registrarCompromisoCampo}
         />
       )}

@@ -55,6 +55,14 @@ export type ImportResult = {
   errors: { row: number; message: string }[];
 };
 
+type HistorialResultadoImportPayload = {
+  historial_id: number;
+  partido_id: number;
+  votos: number;
+  porcentaje: number;
+  posicion: number;
+};
+
 // ---------------------------------------------------------------------------
 // CSV parser
 // ---------------------------------------------------------------------------
@@ -289,7 +297,7 @@ export async function commitHistorialImport(rows: HistorialPreviewRow[]): Promis
         const sortedDesglose = [...row.desglose].sort((a, b) => (b.v || 0) - (a.v || 0));
         const totalVotos = sortedDesglose.reduce((sum, d) => sum + (d.v || 0), 0);
 
-        const payloadDetails = sortedDesglose
+        const payloadDetails: HistorialResultadoImportPayload[] = sortedDesglose
           .map((d, index) => {
             const pId = partyMap.get(d.p.toUpperCase());
             if (!pId) return null;
@@ -303,10 +311,15 @@ export async function commitHistorialImport(rows: HistorialPreviewRow[]): Promis
               posicion: index + 1,
             };
           })
-          .filter(Boolean);
+          .filter(
+            (detail): detail is HistorialResultadoImportPayload =>
+              detail !== null
+          );
 
         if (payloadDetails.length > 0) {
-          const { error: insError } = await service.from("historial_electoral_resultados").insert(payloadDetails as any);
+          const { error: insError } = await service
+            .from("historial_electoral_resultados")
+            .insert(payloadDetails);
           if (insError) throw new Error(`Fallo inserción detalle: ${insError.message}`);
         }
       }

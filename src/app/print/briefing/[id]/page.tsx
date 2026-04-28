@@ -3,6 +3,8 @@ import { getUsuarioActual } from "@/actions/auth";
 import { redirect, notFound } from "next/navigation";
 
 type PageProps = { params: Promise<{ id: string }> };
+type BriefingRecord = Awaited<ReturnType<typeof getBriefingById>>;
+type BriefingMunicipio = BriefingRecord["municipios"];
 
 export default async function PrintBriefingPage({ params }: PageProps) {
   const usuario = await getUsuarioActual();
@@ -13,7 +15,11 @@ export default async function PrintBriefingPage({ params }: PageProps) {
   if (isNaN(briefingId)) return notFound();
 
   const briefing = await getBriefingById(briefingId);
-  const municipioNombre = (briefing.municipios as any)?.nombre ?? `Municipio ${briefing.municipio_id}`;
+  const municipioData = briefing.municipios as BriefingMunicipio;
+  const municipioNombre =
+    municipioData && !Array.isArray(municipioData)
+      ? municipioData.nombre
+      : `Municipio ${briefing.municipio_id}`;
   const fecha = new Date(briefing.created_at).toLocaleDateString("es-MX", { dateStyle: "long" });
 
   const sections = briefing.contenido.split("\n\n").map((block: string, i: number) => {

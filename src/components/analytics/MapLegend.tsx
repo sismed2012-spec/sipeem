@@ -2,10 +2,19 @@
 
 import { MapAnalyticsDTO } from "@/actions/analytics";
 import { Card } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
-export function MapLegend({ data }: { data: MapAnalyticsDTO[] }) {
+export function MapLegend({
+  data,
+  className,
+}: {
+  data: MapAnalyticsDTO[];
+  className?: string;
+}) {
   // Obtener partidos únicos presentes en la vista actual
   const partiesMap = new Map<string, { siglas: string; color: string; count: number }>();
+  let inconsistente = 0;
+  let casiConsistente = 0;
   
   data.forEach(d => {
     if (d.partido_siglas) {
@@ -20,6 +29,8 @@ export function MapLegend({ data }: { data: MapAnalyticsDTO[] }) {
         });
       }
     }
+    if (d.consistency_status === "inconsistente") inconsistente++;
+    if (d.consistency_status === "casi_consistente") casiConsistente++;
   });
 
   const parties = Array.from(partiesMap.values()).sort((a, b) => b.count - a.count);
@@ -27,7 +38,12 @@ export function MapLegend({ data }: { data: MapAnalyticsDTO[] }) {
   if (parties.length === 0) return null;
 
   return (
-    <Card className="absolute bottom-6 left-6 p-4 bg-white/95 backdrop-blur-md rounded-2xl border shadow-[0_10px_30px_rgba(0,0,0,0.1)] max-w-[220px] ring-1 ring-slate-200/50">
+    <Card
+      className={cn(
+        "max-w-[220px] rounded-2xl border bg-white/95 p-4 shadow-[0_10px_30px_rgba(0,0,0,0.1)] ring-1 ring-slate-200/50 backdrop-blur-md",
+        className
+      )}
+    >
       <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 flex items-center justify-between">
         Control Político
         <span className="bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded text-[8px]">{data.length} MUN</span>
@@ -57,6 +73,20 @@ export function MapLegend({ data }: { data: MapAnalyticsDTO[] }) {
         <div className="flex items-center gap-2">
           <div className="w-3 h-3 rounded-sm bg-slate-100 border border-slate-200" />
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Sin Historial</span>
+        </div>
+        <div className="mt-2 space-y-1">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-sm border border-amber-500" />
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+              Casi consistente {casiConsistente > 0 ? `(${casiConsistente})` : ""}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-sm border border-rose-600" style={{ borderStyle: "dashed" }} />
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+              Inconsistente {inconsistente > 0 ? `(${inconsistente})` : ""}
+            </span>
+          </div>
         </div>
       </div>
     </Card>

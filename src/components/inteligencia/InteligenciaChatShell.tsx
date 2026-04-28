@@ -27,6 +27,9 @@ const MUNICIPAL_SUGGESTIONS = [
   "¿Cómo está la estructura de actores?",
 ];
 
+const GLOBAL_EMPTY_STATE =
+  "Pregunta sobre prioridades comparadas, municipios en mayor riesgo o dÃ³nde concentrar operaciÃ³n esta semana.";
+
 const GLOBAL_SUGGESTIONS = [
   "¿Qué municipios tienen mayor riesgo?",
   "¿Dónde concentrar esfuerzos esta semana?",
@@ -43,7 +46,11 @@ export default function InteligenciaChatShell({
 }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [selectedMunicipioIds, setSelectedMunicipioIds] = useState<number[]>(
-    municipioId ? [municipioId] : []
+    municipioId
+      ? [municipioId]
+      : mode === "global"
+      ? municipios.slice(0, 5).map((municipio) => municipio.id)
+      : []
   );
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -169,6 +176,9 @@ export default function InteligenciaChatShell({
           messages={messages}
           loading={loading}
           onSend={handleSend}
+          emptyStateText={
+            mode === "municipal" ? undefined : GLOBAL_EMPTY_STATE
+          }
           suggestions={
             mode === "municipal" ? MUNICIPAL_SUGGESTIONS : GLOBAL_SUGGESTIONS
           }

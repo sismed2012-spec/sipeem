@@ -86,7 +86,12 @@ export default async function StrategicFilePage({ params }: PageProps) {
       </div>
 
       {/* Tabs wrapper — estrategia content passed as children */}
-      <ActoresTabs municipioId={municipioId} actores={actores} proyeccion={proyeccion}>
+      <ActoresTabs
+        municipioId={municipioId}
+        nombre={summary?.nombre || `Municipio ${municipioId}`}
+        actores={actores}
+        proyeccion={proyeccion}
+      >
         {/* Tab: Estrategia */}
         <section className="space-y-4">
           <h2 className="text-xs font-black text-slate-400 uppercase tracking-[0.25em] flex items-center gap-2">

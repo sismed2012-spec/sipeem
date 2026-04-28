@@ -1,0 +1,46 @@
+<h2>¿Cómo llegan las respuestas de la IA?</h2>
+<p class="subtitle">Afecta la experiencia de usuario y la arquitectura del API</p>
+
+<div class="cards">
+
+  <div class="card" data-choice="streaming" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0f172a;padding:16px;min-height:160px;display:flex;flex-direction:column;gap:10px;">
+      <div style="color:#94a3b8;font-size:10px;font-weight:700;text-transform:uppercase">Modo Streaming</div>
+      <div style="background:#1e293b;border-radius:8px;padding:10px;color:#cbd5e1;font-size:11px">¿Cuál es la principal debilidad estratégica de Ecatepec?</div>
+      <div style="background:#312e81;border-radius:8px;padding:10px;color:#e2e8f0;font-size:11px;position:relative;">
+        La cobertura de secciones en zona norte presenta un déficit crítico de 28%, significativamente por debajo de la meta establecida. Los termómetros T1 y T3 confirman debilidad organizacion<span style="display:inline-block;width:2px;height:12px;background:#a5b4fc;margin-left:2px;animation:blink 1s infinite;vertical-align:middle;">▊</span>
+      </div>
+      <div style="color:#475569;font-size:9px;text-align:center">Texto aparece palabra por palabra en tiempo real (~3-8 seg)</div>
+    </div>
+    <style>@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}</style>
+    <div class="card-body">
+      <h3>A — Streaming (tiempo real)</h3>
+      <p>El texto aparece progresivamente mientras la IA genera. Mejor experiencia, se siente "vivo". Requiere Route Handler con <code>streamText</code>. Más complejo de implementar.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="blocking" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0f172a;padding:16px;min-height:160px;display:flex;flex-direction:column;gap:10px;">
+      <div style="color:#94a3b8;font-size:10px;font-weight:700;text-transform:uppercase">Modo Bloqueante</div>
+      <div style="background:#1e293b;border-radius:8px;padding:10px;color:#cbd5e1;font-size:11px">¿Cuál es la principal debilidad estratégica de Ecatepec?</div>
+      <div style="background:#1e293b;border-radius:8px;padding:10px;display:flex;align-items:center;gap:8px;">
+        <div style="display:flex;gap:3px;">
+          <div style="width:6px;height:6px;border-radius:50%;background:#4f46e5;animation:pulse 1.2s infinite;"></div>
+          <div style="width:6px;height:6px;border-radius:50%;background:#4f46e5;animation:pulse 1.2s 0.4s infinite;"></div>
+          <div style="width:6px;height:6px;border-radius:50%;background:#4f46e5;animation:pulse 1.2s 0.8s infinite;"></div>
+        </div>
+        <span style="color:#64748b;font-size:10px">Analizando... (5-15 seg)</span>
+      </div>
+      <div style="background:#312e81;border-radius:8px;padding:10px;color:#e2e8f0;font-size:11px;">
+        La cobertura de secciones en zona norte presenta un déficit crítico de 28%, significativamente por debajo de la meta establecida...
+      </div>
+      <div style="color:#475569;font-size:9px;text-align:center">Spinner durante espera → respuesta completa de golpe</div>
+    </div>
+    <style>@keyframes pulse{0%,100%{opacity:0.3}50%{opacity:1}}</style>
+    <div class="card-body">
+      <h3>B — Respuesta completa</h3>
+      <p>Spinner mientras espera, luego aparece el texto completo. Más simple de implementar (igual que los briefings actuales). Menos atractivo para chat largo.</p>
+    </div>
+  </div>
+
+</div>

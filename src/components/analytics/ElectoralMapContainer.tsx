@@ -9,6 +9,14 @@ import {
 import { EdomexInteractiveMap } from "./EdomexInteractiveMap";
 import { MapLegend } from "./MapLegend";
 import { LayerPanel, type OverlayKey } from "./LayerPanel";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -17,17 +25,47 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card } from "@/components/ui/card";
-import { Loader2, Calendar, Map as MapIcon, Info } from "lucide-react";
+import {
+  Loader2,
+  Calendar,
+  Map as MapIcon,
+  Info,
+  Layers3,
+  List,
+} from "lucide-react";
 import { getCoberturaByMunicipio } from "@/actions/estructura";
 import { createClient } from "@/lib/supabase/client";
 
-// geoData pre-loaded in Server Component to avoid client-side round-trip
+type MapFeatureCollection = GeoJSON.FeatureCollection<
+  GeoJSON.Geometry,
+  GeoJSON.GeoJsonProperties
+>;
+type OverlayDataMap = Record<string, MapFeatureCollection>;
+
+interface CoberturaRealtimeRecord {
+  seccion_id: number;
+  compromisos: number;
+  meta: number;
+}
+
+interface SelectedMunicipioContext {
+  geoId: string | number | null;
+  municipioId: number | null;
+}
+
+function encodeWhereValue(value: string | number) {
+  if (typeof value === "number") return String(value);
+  const trimmed = value.trim();
+  if (/^\d+$/.test(trimmed)) return trimmed;
+  return `'${trimmed.replace(/'/g, "''")}'`;
+}
+
 export function ElectoralMapContainer({
   isAnalytic,
   geoData,
 }: {
   isAnalytic: boolean;
-  geoData: any;
+  geoData: MapFeatureCollection;
 }) {
   const [analytics, setAnalytics] = useState<MapAnalyticsDTO[]>([]);
   const [availableYears, setAvailableYears] = useState<number[]>([]);
@@ -36,9 +74,12 @@ export function ElectoralMapContainer({
   const [error, setError] = useState<string | null>(null);
 
   const [activeOverlays, setActiveOverlays] = useState<Set<OverlayKey>>(new Set());
-  const [overlayData, setOverlayData] = useState<Record<string, any>>({});
-  const [selectedGeoMunicipioId, setSelectedGeoMunicipioId] = useState<number | null>(null);
+  const [overlayData, setOverlayData] = useState<OverlayDataMap>({});
+  const [selectedMunicipio, setSelectedMunicipio] =
+    useState<SelectedMunicipioContext | null>(null);
   const [coberturaMap, setCoberturaMap] = useState<Record<number, { compromisos: number; meta: number }>>({});
+  const [legendOpen, setLegendOpen] = useState(false);
+  const [layersOpen, setLayersOpen] = useState(false);
 
   useEffect(() => {
     if (!isAnalytic) return;
@@ -59,18 +100,32 @@ export function ElectoralMapContainer({
 
   const seccionOverlayActive = activeOverlays.has("seccion");
 
-  // When municipio is selected and seccion overlay is on, reload secciones for it
   useEffect(() => {
-    if (!activeOverlays.has("seccion") || !selectedGeoMunicipioId) return;
-    fetch(`/api/arcgis/seccion?returnGeometry=true&where=CVE_MUN=${selectedGeoMunicipioId}`)
+    if (!activeOverlays.has("seccion")) return;
+
+    const geoId = selectedMunicipio?.geoId ?? null;
+    if (!geoId) {
+      setOverlayData((current) => {
+        if (!current.seccion) return current;
+        const next = { ...current };
+        delete next.seccion;
+        return next;
+      });
+      return;
+    }
+
+    const encodedValue = encodeWhereValue(geoId);
+    fetch(`/api/arcgis/seccion?returnGeometry=true&where=MUNICIPIO=${encodedValue}`)
       .then((r) => r.json())
-      .then((data) => setOverlayData((d) => ({ ...d, seccion: data })))
+      .then((data: MapFeatureCollection) =>
+        setOverlayData((d) => ({ ...d, seccion: data }))
+      )
       .catch(console.error);
-  }, [selectedGeoMunicipioId, activeOverlays]);
+  }, [selectedMunicipio, activeOverlays]);
 
   useEffect(() => {
-    const id = selectedGeoMunicipioId;
-    if (!id || !seccionOverlayActive) {
+    const id = selectedMunicipio?.municipioId ?? null;
+    if (typeof id !== "number" || !seccionOverlayActive) {
       setCoberturaMap({});
       return;
     }
@@ -101,7 +156,10 @@ export function ElectoralMapContainer({
               filter: `municipio_id=eq.${id}`,
             },
             (payload) => {
-              const rec = (payload.new ?? payload.old) as any;
+              const rec = (payload.new ?? payload.old) as
+                | Partial<CoberturaRealtimeRecord>
+                | null;
+              if (!rec?.seccion_id) return;
               const numero = idMap[rec.seccion_id];
               if (numero == null) return;
               if (payload.eventType === "DELETE") {
@@ -111,9 +169,12 @@ export function ElectoralMapContainer({
                   return n;
                 });
               } else {
+                if (rec.compromisos == null || rec.meta == null) return;
+                const compromisos = rec.compromisos;
+                const meta = rec.meta;
                 setCoberturaMap((prev) => ({
                   ...prev,
-                  [numero]: { compromisos: rec.compromisos, meta: rec.meta },
+                  [numero]: { compromisos, meta },
                 }));
               }
             }
@@ -128,7 +189,7 @@ export function ElectoralMapContainer({
       active = false;
       channel?.unsubscribe();
     };
-  }, [selectedGeoMunicipioId, seccionOverlayActive]);
+  }, [selectedMunicipio, seccionOverlayActive]);
 
   const toggleOverlay = useCallback(
     async (key: OverlayKey) => {
@@ -154,17 +215,19 @@ export function ElectoralMapContainer({
       }
 
       // seccion is lazy — only load if a municipio is selected
-      if (key === "seccion" && !selectedGeoMunicipioId) return;
+      if (key === "seccion" && !selectedMunicipio?.geoId) return;
 
       let url = `/api/arcgis/${key}?returnGeometry=true`;
       if (key === "seccion") {
-        url += `&where=CVE_MUN=${selectedGeoMunicipioId}`;
+        const selectedValue = selectedMunicipio?.geoId;
+        if (selectedValue == null) return;
+        url += `&where=MUNICIPIO=${encodeWhereValue(selectedValue)}`;
       }
 
       try {
         const res = await fetch(url);
         if (!res.ok) throw new Error(await res.text());
-        const data = await res.json();
+        const data = (await res.json()) as MapFeatureCollection;
         setOverlayData((d) => ({ ...d, [key]: data }));
       } catch (err) {
         console.error(`Error cargando overlay ${key}:`, err);
@@ -175,7 +238,7 @@ export function ElectoralMapContainer({
         });
       }
     },
-    [activeOverlays, selectedGeoMunicipioId]
+    [activeOverlays, selectedMunicipio]
   );
 
   const handleVerSecciones = useCallback(() => {
@@ -201,9 +264,9 @@ export function ElectoralMapContainer({
   const totalMunicipios = geoData?.features?.length || 0;
 
   return (
-    <div className="w-full h-full flex flex-col md:flex-row bg-slate-50 overflow-hidden">
+    <div className="w-full h-full flex flex-col bg-slate-50 overflow-hidden 2xl:flex-row">
       {isAnalytic && (
-        <aside className="w-full md:w-80 bg-white border-r border-slate-200 z-20 flex flex-col shadow-xl">
+        <aside className="hidden w-full bg-white border-r border-slate-200 z-20 flex-col shadow-xl 2xl:flex 2xl:w-80">
           <div className="p-6 space-y-6">
             <div className="space-y-4">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
@@ -284,24 +347,105 @@ export function ElectoralMapContainer({
         </aside>
       )}
 
-      <main className="flex-1 relative bg-slate-100 overflow-hidden shadow-inner">
+      {isAnalytic && (
+        <div className="border-b border-slate-200 bg-white px-4 py-4 shadow-sm 2xl:hidden">
+          <div className="flex flex-col gap-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
+                  Cartografia territorial
+                </div>
+                <div className="mt-1 text-sm font-black tracking-tight text-slate-900">
+                  Mapa analitico
+                </div>
+              </div>
+              {dataLoading && <Loader2 className="h-4 w-4 animate-spin text-indigo-500" />}
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <Card className="border-none bg-slate-50 p-3">
+                <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                  Municipios
+                </div>
+                <div className="mt-1 text-lg font-black tabular-nums text-slate-900">
+                  {totalMunicipios}
+                </div>
+              </Card>
+              <Card className="border-none bg-slate-50 p-3">
+                <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                  Con historial
+                </div>
+                <div className="mt-1 text-lg font-black tabular-nums text-slate-900">
+                  {analytics.length}
+                </div>
+              </Card>
+            </div>
+
+            <div className="grid grid-cols-[1fr_auto_auto] gap-2">
+              <Select
+                value={selectedYear}
+                onValueChange={(v) => setSelectedYear(v ?? "")}
+              >
+                <SelectTrigger className="h-11 bg-slate-50 border-slate-200 font-bold text-slate-800">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-white border-slate-200">
+                  <SelectItem value="latest" className="font-bold">
+                    Resultado Vigente
+                  </SelectItem>
+                  {availableYears.map((year) => (
+                    <SelectItem key={year} value={year.toString()}>
+                      Elecciones {year}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Button
+                variant="outline"
+                className="h-11 px-3"
+                onClick={() => setLegendOpen(true)}
+              >
+                <List className="h-4 w-4" />
+                Leyenda
+              </Button>
+              <Button
+                variant="outline"
+                className="h-11 px-3"
+                onClick={() => setLayersOpen(true)}
+              >
+                <Layers3 className="h-4 w-4" />
+                Capas
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <main className="relative min-h-[68vh] flex-1 overflow-hidden bg-slate-100 shadow-inner 2xl:min-h-0">
         <EdomexInteractiveMap
           geoData={geoData}
           overlayData={overlayData}
           analytics={analytics}
           isAnalytic={isAnalytic}
-          onMunicipioSelect={setSelectedGeoMunicipioId}
+          onMunicipioSelect={setSelectedMunicipio}
           onVerSecciones={handleVerSecciones}
           coberturaMap={coberturaMap}
         />
 
-        {isAnalytic && <MapLegend data={analytics} />}
+        {isAnalytic && (
+            <MapLegend
+            data={analytics}
+            className="absolute left-4 top-4 z-20 hidden 2xl:block"
+          />
+        )}
 
         <LayerPanel
           activeOverlays={activeOverlays}
           onToggle={toggleOverlay}
-          hasMunicipioSelected={selectedGeoMunicipioId !== null}
+          hasMunicipioSelected={selectedMunicipio?.geoId != null}
           coberturaMap={coberturaMap}
+          className="absolute right-4 top-4 z-20 hidden 2xl:block"
         />
 
         {!isAnalytic && (
@@ -317,6 +461,40 @@ export function ElectoralMapContainer({
           </div>
         )}
       </main>
+
+      <Dialog open={legendOpen} onOpenChange={setLegendOpen}>
+        <DialogContent className="top-auto bottom-4 left-4 right-4 w-auto max-w-none translate-x-0 translate-y-0 rounded-2xl p-0 sm:max-w-none 2xl:hidden">
+          <DialogHeader className="px-4 pt-4">
+            <DialogTitle>Leyenda electoral</DialogTitle>
+            <DialogDescription>
+              Distribucion de fuerzas y consistencia visible en el mapa.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="px-4 pb-4">
+            <MapLegend data={analytics} className="max-w-none shadow-none ring-0" />
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={layersOpen} onOpenChange={setLayersOpen}>
+        <DialogContent className="top-auto bottom-4 left-4 right-4 w-auto max-w-none translate-x-0 translate-y-0 rounded-2xl p-0 sm:max-w-none 2xl:hidden">
+          <DialogHeader className="px-4 pt-4">
+            <DialogTitle>Capas del mapa</DialogTitle>
+            <DialogDescription>
+              Activa limites territoriales y cobertura seccional sin tapar el mapa.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="px-4 pb-4">
+            <LayerPanel
+              activeOverlays={activeOverlays}
+              onToggle={toggleOverlay}
+              hasMunicipioSelected={selectedMunicipio?.geoId != null}
+              coberturaMap={coberturaMap}
+              className="min-w-0 shadow-none ring-0"
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

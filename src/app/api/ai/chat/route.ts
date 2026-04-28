@@ -14,7 +14,7 @@ export async function POST(req: Request) {
   };
 
   const result = streamText({
-    model: MODEL_ANALISIS as any,
+    model: MODEL_ANALISIS,
     system:
       systemPrompt ??
       "Eres un analista político experto en elecciones municipales del Estado de México.",

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Gauge, ClipboardList, Key, Smartphone } from "lucide-react";
+import { Brain, Gauge, ClipboardList, Key, Smartphone } from "lucide-react";
 
 type SidebarNavProps = {
   esAdmin: boolean;
@@ -27,11 +27,11 @@ export default function SidebarNav({ esAdmin }: SidebarNavProps) {
   const isCampo = pathname.startsWith("/campo");
   const isAdmin = pathname === "/admin";
   const isImportacion = pathname === "/admin/importacion";
-  const isUsuarios = pathname.startsWith("/admin/usuarios");
   const isEstrategia = pathname.startsWith("/admin/estrategia-municipal");
   const isCatalogos = pathname.startsWith("/admin/catalogos");
   const isHistorial = pathname.startsWith("/admin/historial");
   const isSituacion = pathname.startsWith("/admin/situacion");
+  const isInteligencia = pathname.startsWith("/admin/inteligencia");
   const isAuditoria = pathname.startsWith("/admin/auditoria");
   const isApiKeys = pathname.startsWith("/admin/api-keys");
 
@@ -63,6 +63,18 @@ export default function SidebarNav({ esAdmin }: SidebarNavProps) {
                 <Gauge className="h-4 w-4" />
               </span>
               Sala de Situación
+            </Link>
+
+            <Link href="/admin/inteligencia" className={itemClass(isInteligencia)}>
+              <span
+                className={iconClass(
+                  isInteligencia,
+                  "bg-violet-600/20 text-violet-300"
+                )}
+              >
+                <Brain className="h-4 w-4" />
+              </span>
+              Inteligencia IA
             </Link>
 
             <Link href="/admin/auditoria" className={itemClass(isAuditoria)}>

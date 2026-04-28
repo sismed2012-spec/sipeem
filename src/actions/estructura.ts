@@ -124,7 +124,32 @@ export interface SeccionDetalle {
   promotor: string | null;
   compromisos: number;
   meta: number;
+  lista_nominal: number | null;
+  tipo: string | null;
   ultimo_evento: string | null;
+}
+
+type SeccionJoinRow = {
+  id: number;
+  meta: number | null;
+  lista_nominal: number | null;
+  tipo: string | null;
+  promotores: { nombre: string }[] | null;
+};
+
+type CoberturaJoinRow = {
+  seccion_id: number;
+  compromisos: number;
+  meta: number;
+  secciones: { numero: number }[] | null;
+};
+
+function normalizeJoin<T>(value: T | T[] | null | undefined): T | null {
+  if (Array.isArray(value)) {
+    return value[0] ?? null;
+  }
+
+  return value ?? null;
 }
 
 // ── Popup summary actions ─────────────────────────────────────────────────────
@@ -178,26 +203,47 @@ export async function getEstructuraBySeccion(
 
   const { data: seccion } = await svc
     .from("secciones")
-    .select("id, meta, promotores(nombre)")
+    .select("id, meta, lista_nominal, tipo, promotores(nombre)")
     .eq("municipio_id", municipioId)
     .eq("numero", seccionNumero)
     .single();
 
   if (!seccion) {
-    return { promotor: null, compromisos: 0, meta: 0, ultimo_evento: null };
+    return {
+      promotor: null,
+      compromisos: 0,
+      meta: 0,
+      lista_nominal: null,
+      tipo: null,
+      ultimo_evento: null,
+    };
+  }
+
+  const seccionRow = seccion as SeccionJoinRow | null;
+  if (!seccionRow) {
+    return {
+      promotor: null,
+      compromisos: 0,
+      meta: 0,
+      lista_nominal: null,
+      tipo: null,
+      ultimo_evento: null,
+    };
   }
 
   const { count: compromisos, data: ultimoEvento } = await svc
     .from("compromisos_seccion")
     .select("fecha", { count: "exact" })
-    .eq("seccion_id", (seccion as any).id)
+    .eq("seccion_id", seccionRow.id)
     .order("fecha", { ascending: false })
     .limit(1);
 
   return {
-    promotor: (seccion as any).promotores?.nombre ?? null,
+    promotor: normalizeJoin(seccionRow.promotores)?.nombre ?? null,
     compromisos: compromisos ?? 0,
-    meta: (seccion as any).meta ?? 0,
+    meta: seccionRow.meta ?? 0,
+    lista_nominal: seccionRow.lista_nominal ?? null,
+    tipo: seccionRow.tipo ?? null,
     ultimo_evento: ultimoEvento?.[0]?.fecha ?? null,
   };
 }
@@ -223,12 +269,14 @@ export async function getCoberturaByMunicipio(
     .order("fecha", { ascending: false });
   if (error) throw new Error(error.message);
   const seen = new Set<number>();
-  return (data ?? []).flatMap((row: any) => {
+  return ((data ?? []) as CoberturaJoinRow[]).flatMap((row) => {
     if (seen.has(row.seccion_id)) return [];
     seen.add(row.seccion_id);
+    const seccion = normalizeJoin(row.secciones);
+    if (!seccion) return [];
     return [{
       seccion_id: row.seccion_id,
-      seccion_numero: row.secciones.numero,
+      seccion_numero: seccion.numero,
       compromisos: row.compromisos,
       meta: row.meta,
     }];

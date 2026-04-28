@@ -42,7 +42,7 @@ Para preguntas sobre municipios no incluidos en la lista, indica que no tienes d
 Responde siempre en español. Sé conciso y estratégicamente útil. Usa Markdown para respuestas largas.`;
 
   const result = streamText({
-    model: MODEL_ANALISIS as any,
+    model: MODEL_ANALISIS,
     system: systemPrompt,
     messages: messages.slice(-8),
     maxOutputTokens: 1500,

@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C M:/SIPPEEM/sipeem status --porcelain)",
+      "Bash(vercel)",
+      "Bash(git *)",
+      "Bash(vercel --prod)",
+      "Read(//c/Users/NZXT/.claude/plugins/cache/claude-plugins-official/superpowers/5.0.7/skills/subagent-driven-development/**)",
+      "Bash(node -e ' *)",
+      "Bash(node_modules/.bin/tsc --noEmit)",
+      "Bash(node -e \"console.log\\('muy_alto'.replace\\('_', ' '\\)\\)\")",
+      "Bash(node -e \"const {createUIMessageStreamResponse} = require\\('ai'\\); console.log\\(typeof createUIMessageStreamResponse\\)\")",
+      "Bash(node -e \"const ai = require\\('ai'\\); const keys = Object.keys\\(ai\\).filter\\(k => k.toLowerCase\\(\\).includes\\('stream'\\)\\); console.log\\(keys.slice\\(0,20\\)\\)\")"
+    ]
+  }
+}

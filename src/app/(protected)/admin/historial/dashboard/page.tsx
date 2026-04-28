@@ -2,6 +2,7 @@ import { getUsuarioActual } from "@/actions/auth";
 import { getHistorialAnalytics } from "@/actions/analytics";
 import { PartyWinsChart, HistoricalTrendChart } from "@/components/analytics/AnalyticsCharts";
 import { StatCard } from "@/components/analytics/StatCard";
+import TacticalObjectivesDashboard from "@/components/historial/TacticalObjectivesDashboard";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -20,19 +21,36 @@ import {
   AlertTriangle,
   AlertOctagon,
   ChevronLeft,
-  ArrowRight
+  ArrowRight,
 } from "lucide-react";
 import AnomaliasDashboard from "@/components/analytics/AnomaliasDashboard";
 import { Suspense } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-export default async function HistorialDashboardPage() {
+type PageProps = {
+  searchParams?: Promise<{
+    priority?: string;
+    status?: string;
+    municipioId?: string;
+    year?: string;
+  }>;
+};
+
+export default async function HistorialDashboardPage({ searchParams }: PageProps) {
   const usuario = await getUsuarioActual();
   if (!usuario) redirect("/login");
   if (usuario.rol === "operador") redirect("/mapa");
 
-  const data = await getHistorialAnalytics();
+  const resolvedSearch = searchParams ? await searchParams : undefined;
+  const data = await getHistorialAnalytics({
+    priority: resolvedSearch?.priority || undefined,
+    status: resolvedSearch?.status || undefined,
+    municipioId: resolvedSearch?.municipioId
+      ? parseInt(resolvedSearch.municipioId, 10)
+      : undefined,
+    year: resolvedSearch?.year ? parseInt(resolvedSearch.year, 10) : undefined,
+  });
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700 max-w-7xl mx-auto pb-12">
@@ -85,6 +103,8 @@ export default async function HistorialDashboardPage() {
           colorClass="text-amber-600"
         />
       </div>
+
+      <TacticalObjectivesDashboard tacticalObjectives={data.tacticalObjectives} />
 
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2 border-slate-200 shadow-xl rounded-2xl overflow-hidden bg-white">

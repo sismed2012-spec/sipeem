@@ -7,13 +7,9 @@ import { Loader2, RefreshCw, CheckCircle2, AlertCircle } from "lucide-react";
 import { toast } from "sonner"; // Assuming sonner is used, based on standard project patterns
 
 export default function MunicipioSyncButton() {
+  type SyncResult = Awaited<ReturnType<typeof syncMunicipiosFromGeoJSON>>;
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<{
-    processed: number;
-    created: number;
-    updated: number;
-    ambiguous: string[];
-  } | null>(null);
+  const [result, setResult] = useState<SyncResult | null>(null);
 
   const handleSync = async () => {
     setLoading(true);
@@ -22,9 +18,12 @@ export default function MunicipioSyncButton() {
       const res = await syncMunicipiosFromGeoJSON();
       setResult(res);
       toast.success("Sincronización completada exitosamente");
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(error);
-      toast.error("Error en la sincronización: " + error.message);
+      toast.error(
+        "Error en la sincronización: " +
+          (error instanceof Error ? error.message : "Error desconocido")
+      );
     } finally {
       setLoading(false);
     }

@@ -24,7 +24,7 @@ export async function guardarSintesisIA(
     .join("\n\n");
 
   const { text: contenido } = await generateText({
-    model: MODEL_RAPIDO as any,
+    model: MODEL_RAPIDO,
     system: "Eres un redactor político. Genera un resumen ejecutivo conciso.",
     prompt: `Resume la siguiente conversación de análisis electoral en un briefing ejecutivo claro y estructurado (máximo 300 palabras). Incluye: tema central, hallazgos clave y recomendaciones mencionadas.\n\n${intercambios}`,
     maxOutputTokens: 600,

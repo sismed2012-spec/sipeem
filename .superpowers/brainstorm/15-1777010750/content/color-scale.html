@@ -1,0 +1,119 @@
+<h2>¿Cómo colorear las secciones en vivo?</h2>
+<p class="subtitle">Cuando el promotor registra compromisos, el polígono de la sección cambia de color. ¿Cuál escala prefieres?</p>
+
+<div class="cards">
+
+  <!-- Opción A -->
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0f172a;padding:16px;display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+        <svg width="52" height="44" viewBox="0 0 52 44">
+          <polygon points="26,2 50,14 50,30 26,42 2,30 2,14" fill="#ef4444" stroke="#fff" stroke-width="1.5"/>
+          <text x="26" y="26" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">0–33%</text>
+        </svg>
+        <span style="color:#ef4444;font-size:9px;font-weight:700">CRÍTICO</span>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+        <svg width="52" height="44" viewBox="0 0 52 44">
+          <polygon points="26,2 50,14 50,30 26,42 2,30 2,14" fill="#f59e0b" stroke="#fff" stroke-width="1.5"/>
+          <text x="26" y="26" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">34–66%</text>
+        </svg>
+        <span style="color:#f59e0b;font-size:9px;font-weight:700">EN PROGRESO</span>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+        <svg width="52" height="44" viewBox="0 0 52 44">
+          <polygon points="26,2 50,14 50,30 26,42 2,30 2,14" fill="#3b82f6" stroke="#fff" stroke-width="1.5"/>
+          <text x="26" y="26" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">67–99%</text>
+        </svg>
+        <span style="color:#3b82f6;font-size:9px;font-weight:700">AVANZADO</span>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+        <svg width="52" height="44" viewBox="0 0 52 44">
+          <polygon points="26,2 50,14 50,30 26,42 2,30 2,14" fill="#10b981" stroke="#fff" stroke-width="1.5"/>
+          <text x="26" y="26" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">100%</text>
+        </svg>
+        <span style="color:#10b981;font-size:9px;font-weight:700">COMPLETADO</span>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+        <svg width="52" height="44" viewBox="0 0 52 44">
+          <polygon points="26,2 50,14 50,30 26,42 2,30 2,14" fill="#475569" stroke="#fff" stroke-width="1.5"/>
+          <text x="26" y="26" text-anchor="middle" fill="#94a3b8" font-size="10">—</text>
+        </svg>
+        <span style="color:#94a3b8;font-size:9px">SIN META</span>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — 4 niveles de cobertura</h3>
+      <p>Rojo → Amarillo → Azul → Verde según % de compromisos/meta. Un vistazo basta para ver dónde atacar.</p>
+    </div>
+  </div>
+
+  <!-- Opción B -->
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0f172a;padding:16px;display:flex;align-items:center;justify-content:center;gap:4px">
+      <svg width="280" height="60" viewBox="0 0 280 60">
+        <defs>
+          <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" style="stop-color:#ef4444"/>
+            <stop offset="50%" style="stop-color:#f59e0b"/>
+            <stop offset="100%" style="stop-color:#10b981"/>
+          </linearGradient>
+        </defs>
+        <rect x="10" y="10" width="260" height="24" rx="4" fill="url(#grad)"/>
+        <text x="10" y="50" fill="#94a3b8" font-size="10">0%</text>
+        <text x="120" y="50" fill="#94a3b8" font-size="10">50%</text>
+        <text x="250" y="50" fill="#94a3b8" font-size="10">100%</text>
+        <!-- Example hexagons at different positions -->
+        <polygon points="40,4 52,11 52,25 40,32 28,25 28,11" fill="#ef4444" stroke="#fff" stroke-width="1" transform="translate(0,24)"/>
+        <polygon points="40,4 52,11 52,25 40,32 28,25 28,11" fill="#f59e0b" stroke="#fff" stroke-width="1" transform="translate(80,24)"/>
+        <polygon points="40,4 52,11 52,25 40,32 28,25 28,11" fill="#22c55e" stroke="#fff" stroke-width="1" transform="translate(160,24)"/>
+        <polygon points="40,4 52,11 52,25 40,32 28,25 28,11" fill="#10b981" stroke="#fff" stroke-width="1" transform="translate(220,24)"/>
+      </svg>
+    </div>
+    <div class="card-body">
+      <h3>B — Gradiente continuo rojo→verde</h3>
+      <p>El color interpola suavemente entre 0% y 100%. Más preciso visualmente, pero la diferencia entre 60% y 70% es sutil.</p>
+    </div>
+  </div>
+
+  <!-- Opción C -->
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0f172a;padding:16px;display:flex;gap:16px;align-items:center;justify-content:center">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+        <svg width="60" height="52" viewBox="0 0 60 52">
+          <polygon points="30,2 58,16 58,36 30,50 2,36 2,16" fill="#10b981" stroke="#fff" stroke-width="1.5"/>
+          <text x="30" y="30" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">CON META</text>
+        </svg>
+        <span style="color:#10b981;font-size:9px;font-weight:700">tiene promotor<br>y compromisos</span>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+        <svg width="60" height="52" viewBox="0 0 60 52">
+          <polygon points="30,2 58,16 58,36 30,50 2,36 2,16" fill="#ef4444" stroke="#fff" stroke-width="1.5"/>
+          <text x="30" y="30" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">SIN META</text>
+        </svg>
+        <span style="color:#ef4444;font-size:9px;font-weight:700">sin promotor<br>asignado</span>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+        <svg width="60" height="52" viewBox="0 0 60 52">
+          <polygon points="30,2 58,16 58,36 30,50 2,36 2,16" fill="#475569" stroke="#fff" stroke-width="1.5"/>
+          <text x="30" y="30" text-anchor="middle" fill="#94a3b8" font-size="10">N/A</text>
+        </svg>
+        <span style="color:#94a3b8;font-size:9px">sin datos</span>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — Binario: cubierta / sin cubrir</h3>
+      <p>Solo verde (tiene meta y compromisos) o rojo (sin promotor). Simple y rápido de leer desde lejos en el campo.</p>
+    </div>
+  </div>
+
+</div>
+
+<div class="section" style="margin-top:20px;background:#1e293b;border-radius:8px;padding:14px">
+  <p class="label" style="margin-bottom:6px">Contexto</p>
+  <p style="font-size:12px;color:#94a3b8;margin:0">
+    La tabla <code style="background:#0f172a;padding:1px 5px;border-radius:3px;color:#7dd3fc">compromisos_seccion</code> tiene: <strong style="color:#f8fafc">compromisos</strong> (captados) y <strong style="color:#f8fafc">meta</strong> (objetivo).
+    El porcentaje es <code style="background:#0f172a;padding:1px 5px;border-radius:3px;color:#7dd3fc">compromisos / meta × 100</code>.
+    Actualización en vivo via Supabase Realtime cuando cualquier promotor registra.
+  </p>
+</div>

@@ -10,6 +10,50 @@ const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
+type HistorialSeedItem = {
+  p: string;
+  v: string | number;
+  pct: string | number;
+  data?: unknown[];
+};
+
+type SeedMunicipioData = {
+  color: string;
+  sec_inicio: number;
+  secciones: number;
+  regidores: number;
+  alcalde: string;
+  partido: string;
+  nom: string | number;
+  padron: string | number;
+  votos_totales: string | number;
+  votos: string | number;
+  dif_votos: string | number;
+  dif_pct: string | number;
+  part: string | number;
+  sec_ganadas?: number;
+  hist?: Record<string, HistorialSeedItem>;
+  term1?: number;
+  term2?: number;
+  term3?: number;
+  term4?: number;
+  term5?: number;
+  e1_comp?: string;
+  e1_rec?: string;
+  e2_gen?: string;
+  e2_atr?: string;
+  e3_gob?: string;
+  e3_dem?: string;
+  e4_niv?: string;
+  e4_foco?: string;
+  pri_pte?: string;
+  pri_sec?: string;
+  estadoHTML?: {
+    inaugurado?: boolean;
+    linkMaps?: string | null;
+  };
+};
+
 function parseNum(s: string | number): number {
   if (typeof s === "number") return s;
   return parseInt(s.replace(/,/g, ""), 10) || 0;
@@ -25,9 +69,11 @@ async function seed() {
     __dirname,
     "../../SIPEEM_BaseDatos_Segura_20260408_1540.json"
   );
-  const raw = JSON.parse(fs.readFileSync(jsonPath, "utf-8"));
+  const raw = JSON.parse(
+    fs.readFileSync(jsonPath, "utf-8")
+  ) as Record<string, SeedMunicipioData>;
 
-  for (const [nombre, data] of Object.entries(raw) as [string, any][]) {
+  for (const [nombre, data] of Object.entries(raw)) {
     console.log(`Seeding: ${nombre}`);
 
     // 1. Insert municipio
@@ -81,7 +127,7 @@ async function seed() {
 
     // 4. Historial electoral
     if (data.hist) {
-      for (const [anio, h] of Object.entries(data.hist) as [string, any][]) {
+      for (const [anio, h] of Object.entries(data.hist)) {
         await supabase.from("historial_electoral").upsert(
           {
             municipio_id: munId,

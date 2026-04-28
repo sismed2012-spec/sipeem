@@ -49,6 +49,8 @@ export default function HistorialForm({
   municipios,
   partidos,
 }: HistorialFormProps) {
+  type HistorialMainPayload = Parameters<typeof upsertHistorialManual>[0];
+  type HistorialResultadosPayload = Parameters<typeof upsertHistorialManual>[1];
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -165,7 +167,7 @@ export default function HistorialForm({
         );
       }
 
-      const mainData = {
+      const mainData: HistorialMainPayload = {
         id: initialData?.id,
         municipio_id: munId,
         anio,
@@ -176,7 +178,16 @@ export default function HistorialForm({
         notas: (formData.get("notas") as string) || "",
       };
 
-      await upsertHistorialManual(mainData as any, rankedResults as any);
+      const resultadosPayload: HistorialResultadosPayload = rankedResults.map(
+        (resultado) => ({
+          partido_id: resultado.partido_id,
+          votos: resultado.votos,
+          porcentaje: resultado.porcentaje,
+          posicion: resultado.posicion,
+        })
+      );
+
+      await upsertHistorialManual(mainData, resultadosPayload);
 
       toast.success(isEdit ? "Registro actualizado" : "Registro creado correctamente");
       router.push("/admin/historial");

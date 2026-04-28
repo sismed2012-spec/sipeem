@@ -90,10 +90,19 @@ export async function upsertTermometros(
 ) {
   await assertAdmin();
   const service = createServiceClient();
+  const sanitizeTerm = (value: number | null | undefined): number =>
+    Math.min(100, Math.max(0, Math.round(Number(value ?? 0))));
+  const normalized = {
+    term1: sanitizeTerm(data.term1),
+    term2: sanitizeTerm(data.term2),
+    term3: sanitizeTerm(data.term3),
+    term4: sanitizeTerm(data.term4),
+    term5: sanitizeTerm(data.term5),
+  };
 
   const { error } = await service
     .from("termometros")
-    .upsert({ municipio_id: municipioId, ...data }, { onConflict: "municipio_id" });
+    .upsert({ municipio_id: municipioId, ...normalized }, { onConflict: "municipio_id" });
 
   if (error) throw new Error(error.message);
   revalidatePath(`/admin/estrategia-municipal/${municipioId}`);

@@ -28,16 +28,20 @@ export default function PulsoDigitalPanel({ municipioId, initialPulso }: Props) 
   const [analizando, setAnalizando] = useState(false);
   const [query, setQuery] = useState("");
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   async function handleAnalizar() {
     setAnalizando(true);
+    setError(null);
     try {
       const nuevo = await analizarPulsoDigital(municipioId, query.trim() || undefined);
       setPulso((prev) => [nuevo, ...prev].slice(0, 5));
       setExpandedId(nuevo.id);
       toast.success("Análisis de pulso digital generado");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error al analizar");
+      const message = err instanceof Error ? err.message : "Error al analizar";
+      setError(message);
+      toast.error(message);
     } finally {
       setAnalizando(false);
     }
@@ -79,6 +83,11 @@ export default function PulsoDigitalPanel({ municipioId, initialPulso }: Props) 
           <p className="text-[10px] text-slate-400">
             Requiere <code className="bg-slate-100 px-1 rounded">TAVILY_API_KEY</code> en el entorno.
           </p>
+          {error && (
+            <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">
+              {error}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -106,7 +115,7 @@ export default function PulsoDigitalPanel({ municipioId, initialPulso }: Props) 
                       })}
                     </span>
                     <span className="text-[10px] text-slate-400">
-                      · {p.fuentes_count} fuente{p.fuentes_count !== 1 ? "s" : ""}
+                      · {p.fuentes_count ?? 0} fuente{(p.fuentes_count ?? 0) !== 1 ? "s" : ""}
                     </span>
                   </div>
                   <button

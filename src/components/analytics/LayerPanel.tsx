@@ -27,6 +27,7 @@ interface Props {
   onToggle: (key: OverlayKey) => void;
   hasMunicipioSelected: boolean;
   coberturaMap?: Record<number, { compromisos: number; meta: number }>;
+  className?: string;
 }
 
 export function LayerPanel({
@@ -34,9 +35,17 @@ export function LayerPanel({
   onToggle,
   hasMunicipioSelected,
   coberturaMap = {},
+  className,
 }: Props) {
+  const hasCoberturaData = Object.keys(coberturaMap).length > 0;
+
   return (
-    <div className="absolute top-4 right-4 z-20 bg-slate-900/95 backdrop-blur-sm rounded-xl p-3 shadow-2xl min-w-[140px] border border-slate-700/50">
+    <div
+      className={cn(
+        "rounded-xl border border-slate-700/50 bg-slate-900/95 p-3 shadow-2xl backdrop-blur-sm min-w-[140px]",
+        className
+      )}
+    >
       <div className="text-slate-400 text-[9px] uppercase tracking-[0.18em] font-bold mb-2.5">
         Capas
       </div>
@@ -86,7 +95,9 @@ export function LayerPanel({
 
       {activeOverlays.has("seccion") && (
         <div className="border-t border-slate-700 pt-2 mt-2">
-          <p className="text-[9px] text-slate-500 uppercase tracking-widest mb-1.5">Cobertura</p>
+          <p className="text-[9px] text-slate-500 uppercase tracking-widest mb-1.5">
+            Cobertura {hasCoberturaData ? "" : "(sin datos)"}
+          </p>
           {[
             { color: "#10b981", label: "100% Completado" },
             { color: "#3b82f6", label: "67–99% Avanzado" },

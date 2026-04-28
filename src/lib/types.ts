@@ -59,9 +59,11 @@ export interface HistorialElectoral {
   id?: number;
   municipio_id: number;
   anio: number;
-  partido_ganador_id: number;
+  partido_ganador_id: number | null;
   votos_ganador: number;
   porcentaje_ganador: number;
+  source?: "legacy_municipal" | "oficial_municipal";
+  canEdit?: boolean;
   fuente?: string | null;
   notas?: string | null;
   created_at?: string;
@@ -85,6 +87,178 @@ export interface HistorialElectoralDetalle extends HistorialElectoral {
   };
   partido_ganador?: Partido;
   resultados?: (HistorialResultado & { partido: Partido })[];
+  segundo_lugar?: {
+    siglas: string;
+    color?: string;
+    votos: number;
+    porcentaje: number;
+  } | null;
+  margen_votos?: number | null;
+  margen_porcentual?: number | null;
+}
+
+export interface HistorialSeccionElectoral {
+  id?: number;
+  anio: number;
+  municipio_id: number;
+  seccion_numero: number;
+  seccion_id?: number | null;
+  geo_municipio_id?: number | null;
+  id_distrito_local?: number | null;
+  cabecera_distrital_local?: string | null;
+  casillas: number;
+  actas_casilla_mec: number;
+  num_votos_validos: number;
+  num_votos_can_nreg: number;
+  num_votos_nulos: number;
+  total_votos: number;
+  lista_nominal?: number | null;
+  fuente?: string | null;
+  raw_municipio_nombre?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface HistorialSeccionResultado {
+  id?: number;
+  historial_seccion_id: number;
+  fuerza: string;
+  votos: number;
+  created_at?: string;
+}
+
+export interface HistorialSeccionResultadoPreview {
+  fuerza: string;
+  votos: number;
+}
+
+export type HistorialSeccionImportStatus =
+  | "pendiente"
+  | "nuevo"
+  | "actualizacion"
+  | "omitido";
+
+export interface HistorialSeccionImportPreviewRow
+  extends Omit<HistorialSeccionElectoral, "municipio_id"> {
+  row_index: number;
+  municipio_id: number | null;
+  municipio_nombre: string;
+  fuerza_resultados: HistorialSeccionResultadoPreview[];
+  status: HistorialSeccionImportStatus;
+  statusLabel: string;
+  warnings: string[];
+  errors: string[];
+}
+
+export interface HistorialSeccionImportResult {
+  inserted: number;
+  updated: number;
+  skipped: number;
+  errors: {
+    row: number;
+    message: string;
+  }[];
+}
+
+export interface HistorialMunicipalOficial {
+  id?: number;
+  anio: number;
+  municipio_id: number;
+  geo_municipio_id?: number | null;
+  total_secciones: number;
+  total_casillas: number;
+  total_casillas_mec: number;
+  lista_nominal: number;
+  votos_validos: number;
+  votos_no_registrados: number;
+  votos_nulos: number;
+  total_votos: number;
+  participacion_ciudadana: number;
+  ganador_siglas?: string | null;
+  ganador_votacion: number;
+  ganador_porcentaje: number;
+  segundo_siglas?: string | null;
+  segundo_votacion: number;
+  segundo_porcentaje: number;
+  margen_votos: number;
+  margen_porcentual: number;
+  ruta_acta?: string | null;
+  fuente?: string | null;
+  raw_municipio_nombre?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface HistorialMunicipalOficialResultado {
+  id?: number;
+  historial_municipal_id: number;
+  fuerza: string;
+  votos: number;
+  created_at?: string;
+}
+
+export type HistorialMunicipalOficialImportStatus =
+  | "pendiente"
+  | "nuevo"
+  | "actualizacion";
+
+export interface HistorialMunicipalOficialImportPreviewRow
+  extends Omit<HistorialMunicipalOficial, "municipio_id"> {
+  row_index: number;
+  municipio_id: number | null;
+  municipio_nombre: string;
+  fuerza_resultados: HistorialSeccionResultadoPreview[];
+  status: HistorialMunicipalOficialImportStatus;
+  statusLabel: string;
+  warnings: string[];
+  errors: string[];
+}
+
+export interface HistorialMunicipalOficialImportResult {
+  inserted: number;
+  updated: number;
+  skipped: number;
+  errors: {
+    row: number;
+    message: string;
+  }[];
+}
+
+// --- Gubernatura seccional ---
+
+export type GubernaturaSeccionalPreviewStatus =
+  | "pendiente"
+  | "nuevo"
+  | "actualizacion"
+  | "omitido";
+
+export interface GubernaturaSeccionalPreviewRow {
+  row_index: number;
+  anio: number;
+  geo_municipio_id: number | null;
+  municipio_id: number | null;
+  municipio_nombre: string | null;
+  seccion_numero: number;
+  id_distrito_local: number | null;
+  cabecera_distrital_local: string | null;
+  casillas: number;
+  num_votos_validos: number;
+  num_votos_can_nreg: number;
+  num_votos_nulos: number;
+  total_votos: number;
+  lista_nominal: number | null;
+  fuerza_resultados: { fuerza: string; votos: number }[];
+  status: GubernaturaSeccionalPreviewStatus;
+  statusLabel: string;
+  warnings: string[];
+  errors: string[];
+}
+
+export interface GubernaturaSeccionalImportResult {
+  inserted: number;
+  updated: number;
+  skipped: number;
+  errors: { row: number; message: string }[];
 }
 
 export interface Termometros {

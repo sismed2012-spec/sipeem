@@ -68,15 +68,21 @@ export function StrategicForm({ municipioId, initialData }: Props) {
         municipio_id: municipioId,
       });
       toast.success("Valoración estratégica actualizada");
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(error);
-      toast.error("Error al guardar: " + error.message);
+      toast.error(
+        "Error al guardar: " +
+          (error instanceof Error ? error.message : "Error desconocido")
+      );
     } finally {
       setLoading(false);
     }
   };
 
-  const updateField = (field: keyof EstrategiaMunicipal, value: any) => {
+  const updateField = <T extends keyof EstrategiaMunicipal>(
+    field: T,
+    value: EstrategiaMunicipal[T]
+  ) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 

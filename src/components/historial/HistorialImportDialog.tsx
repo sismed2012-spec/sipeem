@@ -50,7 +50,7 @@ export default function HistorialImportDialog() {
       const enrichedRows = await previewHistorialImport(rows);
       setPreviewRows(enrichedRows);
       setStep(2);
-    } catch (err) {
+    } catch {
       toast.error("Error al procesar el archivo");
     } finally {
       setLoading(false);
@@ -67,7 +67,7 @@ export default function HistorialImportDialog() {
       
       // HARDENED UI REFRESH
       router.refresh();
-    } catch (err) {
+    } catch {
       toast.error("Error al guardar los datos");
     } finally {
       setLoading(false);

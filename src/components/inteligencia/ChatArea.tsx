@@ -11,6 +11,7 @@ interface Props {
   loading: boolean;
   onSend: (content: string) => void;
   suggestions?: string[];
+  emptyStateText?: string;
 }
 
 export default function ChatArea({
@@ -18,6 +19,7 @@ export default function ChatArea({
   loading,
   onSend,
   suggestions,
+  emptyStateText = "Pregunta sobre la estrategia, riesgos, aspirantes o cualquier aspecto de este municipio.",
 }: Props) {
   const [input, setInput] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -39,10 +41,7 @@ export default function ChatArea({
         {messages.length === 0 && (
           <div className="text-center py-12 space-y-2">
             <Bot className="w-8 h-8 text-slate-300 mx-auto" />
-            <p className="text-sm text-slate-400">
-              Pregunta sobre la estrategia, riesgos, aspirantes o cualquier
-              aspecto de este municipio.
-            </p>
+            <p className="text-sm text-slate-400">{emptyStateText}</p>
             {suggestions && suggestions.length > 0 && (
               <div className="flex flex-wrap gap-2 justify-center mt-4">
                 {suggestions.map((sugg) => (

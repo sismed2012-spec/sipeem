@@ -34,16 +34,28 @@ export async function POST(req: Request) {
         .eq("municipio_id", municipioId)
         .maybeSingle(),
       svc
-        .from("historial_electoral")
-        .select("partido_ganador_id")
+        .from("historial_municipal_oficial")
+        .select("anio")
         .eq("municipio_id", municipioId)
         .order("anio", { ascending: false })
         .limit(2),
     ]);
 
+  let histCount = histRes.data?.length ?? 0;
+  if (histCount === 0) {
+    const fallbackHistRes = await svc
+      .from("historial_electoral")
+      .select("anio")
+      .eq("municipio_id", municipioId)
+      .order("anio", { ascending: false })
+      .limit(2);
+    histCount = fallbackHistRes.data?.length ?? 0;
+  }
+
   const nombre = electoral?.summary?.nombre ?? `Municipio ${municipioId}`;
   const timeline = electoral?.timeline?.slice(0, 3) ?? [];
   const t = actores.termometros;
+  const esc = actores.escenarios;
 
   // Cobertura de secciones
   const cobRows = cobRes.data ?? [];
@@ -58,7 +70,6 @@ export async function POST(req: Request) {
       : null;
 
   // Proyección inline (misma lógica que proyeccion.ts pero sin cargar los 125 municipios)
-  const histCount = histRes.data?.length ?? 0;
   const score_historial = histCount >= 2 ? 50 : histCount === 1 ? 40 : 30;
   const score_termometros = t
     ? (t.term1 + t.term2 + t.term3 + t.term4 + t.term5) / 5
@@ -123,9 +134,27 @@ ${
 ### Termómetros políticos (escala 0 a 100)
 ${
   t
-    ? `T1=${t.term1} T2=${t.term2} T3=${t.term3} T4=${t.term4} T5=${t.term5}
+    ? `Fortaleza organizacional interna: ${t.term1}
+Competitividad electoral percibida: ${t.term2}
+Presencia territorial y cobertura: ${t.term3}
+Movilización y activismo: ${t.term4}
+Imagen pública del candidato/partido: ${t.term5}
 Promedio: ${((t.term1 + t.term2 + t.term3 + t.term4 + t.term5) / 5).toFixed(1)}`
     : "Sin termómetros registrados."
+}
+
+### Escenarios políticos (planeación táctica)
+${
+  esc
+    ? `Escenario 1 · Riesgo competitivo: ${esc.e1_comp || "Sin registrar"}
+Escenario 1 · Respuesta táctica: ${esc.e1_rec || "Sin registrar"}
+Escenario 2 · Condición general: ${esc.e2_gen || "Sin registrar"}
+Escenario 2 · Acción de atracción: ${esc.e2_atr || "Sin registrar"}
+Escenario 3 · Impacto de entorno/gobierno: ${esc.e3_gob || "Sin registrar"}
+Escenario 3 · Contramedida de posicionamiento: ${esc.e3_dem || "Sin registrar"}
+Escenario 4 · Riesgo interno: ${esc.e4_niv || "Sin registrar"}
+Escenario 4 · Foco de gestión: ${esc.e4_foco || "Sin registrar"}`
+    : "Sin escenarios registrados."
 }
 
 ### Comité municipal
@@ -177,7 +206,7 @@ ${compRes.data?.riesgo_electoral ?? "Sin clasificar"}
 - Usa formato Markdown para respuestas largas`;
 
   const result = streamText({
-    model: MODEL_ANALISIS as any,
+    model: MODEL_ANALISIS,
     system: systemPrompt,
     messages: messages.slice(-8),
     maxOutputTokens: 1500,

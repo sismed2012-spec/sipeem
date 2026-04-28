@@ -1,0 +1,124 @@
+<h2>Diseño del popup al hacer clic en un municipio</h2>
+<p class="subtitle">Combina datos de ArcGIS (geometría/catálogo) + Supabase (datos electorales). ¿Cuál sección de información incluir?</p>
+
+<div class="mockup" style="max-width:780px;margin:0 auto">
+  <div class="mockup-header">Vista: /mapa — popup activo sobre municipio</div>
+  <div class="mockup-body" style="display:flex;gap:0;min-height:420px;padding:0">
+
+    <!-- Mapa fondo -->
+    <div style="flex:1;background:linear-gradient(135deg,#e2e8f0 0%,#cbd5e1 100%);position:relative;min-width:0">
+      <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:4px">
+        <div style="width:90px;height:70px;background:#dbeafe;border:2px solid #3b82f6;border-radius:4px;opacity:.7"></div>
+        <div style="font-size:10px;color:#475569">mapa municipios</div>
+      </div>
+      <!-- Popup flotante -->
+      <div style="position:absolute;top:20px;right:20px;width:280px;background:#fff;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.18);overflow:hidden;border:1px solid #e2e8f0">
+        <!-- Header popup -->
+        <div style="background:#1e293b;padding:12px 14px;display:flex;justify-content:space-between;align-items:flex-start">
+          <div>
+            <div style="color:#f8fafc;font-size:13px;font-weight:700">Toluca</div>
+            <div style="color:#94a3b8;font-size:10px;margin-top:2px">CVEGEO: 15106 · Región: Valle de Toluca</div>
+          </div>
+          <div style="background:#334155;border-radius:6px;padding:3px 7px;font-size:9px;color:#94a3b8">ArcGIS</div>
+        </div>
+
+        <!-- Tabs -->
+        <div style="display:flex;border-bottom:1px solid #f1f5f9">
+          <div style="flex:1;padding:8px;text-align:center;font-size:11px;font-weight:600;color:#3b82f6;border-bottom:2px solid #3b82f6">Cartografía</div>
+          <div style="flex:1;padding:8px;text-align:center;font-size:11px;color:#94a3b8">Electoral</div>
+          <div style="flex:1;padding:8px;text-align:center;font-size:11px;color:#94a3b8">Estructura</div>
+        </div>
+
+        <!-- Tab: Cartografía (ArcGIS) -->
+        <div style="padding:12px;font-size:11px">
+          <div style="color:#64748b;font-size:9px;text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px">Datos ArcGIS</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px">
+            <div style="background:#f8fafc;border-radius:6px;padding:6px 8px">
+              <div style="color:#94a3b8;font-size:9px">Dto. Federal</div>
+              <div style="color:#1e293b;font-weight:600">Distrito 24</div>
+            </div>
+            <div style="background:#f8fafc;border-radius:6px;padding:6px 8px">
+              <div style="color:#94a3b8;font-size:9px">Dto. Local</div>
+              <div style="color:#1e293b;font-weight:600">Distrito 37</div>
+            </div>
+            <div style="background:#f8fafc;border-radius:6px;padding:6px 8px">
+              <div style="color:#94a3b8;font-size:9px">Secciones</div>
+              <div style="color:#1e293b;font-weight:600">142</div>
+            </div>
+            <div style="background:#f8fafc;border-radius:6px;padding:6px 8px">
+              <div style="color:#94a3b8;font-size:9px">Lista nominal</div>
+              <div style="color:#1e293b;font-weight:600">567,432</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:6px">
+            <button style="flex:1;background:#3b82f6;color:#fff;border:none;border-radius:6px;padding:6px;font-size:10px;cursor:pointer">Ver secciones</button>
+            <button style="flex:1;background:#f1f5f9;color:#475569;border:none;border-radius:6px;padding:6px;font-size:10px;cursor:pointer">Ficha completa →</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Panel overlays lateral -->
+    <div style="width:130px;background:#1e293b;padding:10px;flex-shrink:0">
+      <div style="color:#94a3b8;font-size:9px;text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px">Capas</div>
+      <div style="display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid #334155">
+        <div style="width:10px;height:10px;background:#3b82f6;border-radius:2px;flex-shrink:0"></div>
+        <span style="color:#e2e8f0;font-size:11px">Municipio</span>
+        <span style="color:#475569;font-size:9px;margin-left:auto">base</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid #334155">
+        <div style="width:10px;height:10px;border:2px solid #f59e0b;border-radius:2px;flex-shrink:0"></div>
+        <span style="color:#94a3b8;font-size:11px">Dto. Fed.</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid #334155">
+        <div style="width:10px;height:10px;border:2px solid #8b5cf6;border-radius:2px;flex-shrink:0"></div>
+        <span style="color:#94a3b8;font-size:11px">Dto. Local</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid #334155">
+        <div style="width:10px;height:10px;border:2px solid #94a3b8;border-radius:2px;flex-shrink:0"></div>
+        <span style="color:#94a3b8;font-size:11px">Sección</span>
+        <span style="color:#475569;font-size:9px;margin-left:auto">lazy</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;padding:5px 0">
+        <div style="width:10px;height:10px;border:2px solid #94a3b8;border-radius:2px;flex-shrink:0"></div>
+        <span style="color:#94a3b8;font-size:11px">Entidad</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:20px">
+  <h3>Datos del popup por tab</h3>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:10px">
+    <div style="background:#f8fafc;border-radius:8px;padding:12px;border:1px solid #e2e8f0">
+      <div style="font-weight:700;font-size:12px;color:#1e293b;margin-bottom:6px">📍 Cartografía <span style="color:#64748b;font-weight:400">(ArcGIS)</span></div>
+      <ul style="font-size:11px;color:#475569;padding-left:14px;margin:0;line-height:1.8">
+        <li>Nombre municipio</li>
+        <li>CVEGEO</li>
+        <li>Distrito Federal</li>
+        <li>Distrito Local</li>
+        <li>Lista nominal</li>
+        <li>Número de secciones</li>
+      </ul>
+    </div>
+    <div style="background:#f8fafc;border-radius:8px;padding:12px;border:1px solid #e2e8f0">
+      <div style="font-weight:700;font-size:12px;color:#1e293b;margin-bottom:6px">🗳️ Electoral <span style="color:#64748b;font-weight:400">(Supabase)</span></div>
+      <ul style="font-size:11px;color:#475569;padding-left:14px;margin:0;line-height:1.8">
+        <li>Último resultado capturado</li>
+        <li>Tendencia (termómetro)</li>
+        <li>Responsable asignado</li>
+        <li>Votos objetivo</li>
+        <li>Avance de estructura</li>
+      </ul>
+    </div>
+    <div style="background:#f8fafc;border-radius:8px;padding:12px;border:1px solid #e2e8f0">
+      <div style="font-weight:700;font-size:12px;color:#1e293b;margin-bottom:6px">🏗️ Estructura <span style="color:#64748b;font-weight:400">(Supabase)</span></div>
+      <ul style="font-size:11px;color:#475569;padding-left:14px;margin:0;line-height:1.8">
+        <li>Promotores registrados</li>
+        <li>Cobertura de secciones %</li>
+        <li>Compromisos captados</li>
+        <li>Último evento de campo</li>
+      </ul>
+    </div>
+  </div>
+</div>

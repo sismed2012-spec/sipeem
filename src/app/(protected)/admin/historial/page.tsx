@@ -18,11 +18,19 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import HistorialFilters from "@/components/historial/HistorialFilters";
 import HistorialImportDialog from "@/components/historial/HistorialImportDialog";
-import { 
-  BarChart2, 
-  LineChart, 
-  Plus, 
-  Settings2 
+import HistorialMunicipalOficialImportDialog from "@/components/historial/HistorialMunicipalOficialImportDialog";
+import HistorialMunicipalOficial2021ImportDialog from "@/components/historial/HistorialMunicipalOficial2021ImportDialog";
+import HistorialSeccionImportDialog from "@/components/historial/HistorialSeccionImportDialog";
+import HistorialSeccion2021ImportDialog from "@/components/historial/HistorialSeccion2021ImportDialog";
+import HistorialGubernaturaSeccionalImportDialog from "@/components/historial/HistorialGubernaturaSeccionalImportDialog";
+import HistorialMunicipal2018ImportDialog from "@/components/historial/HistorialMunicipal2018ImportDialog";
+import HistorialSeccion2018ImportDialog from "@/components/historial/HistorialSeccion2018ImportDialog";
+import {
+  BarChart2,
+  LineChart,
+  Plus,
+  Settings2,
+  TableProperties,
 } from "lucide-react";
 
 type PageProps = {
@@ -73,12 +81,24 @@ export default async function HistorialPage({ searchParams }: PageProps) {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <Link href="/admin/historial/consulta">
+            <Button variant="outline" className="rounded-xl border-slate-200 font-bold hover:bg-slate-50 transition-all shadow-sm">
+              <TableProperties className="mr-2 h-4 w-4 text-violet-600" /> Consulta Avanzada
+            </Button>
+          </Link>
           <Link href="/admin/historial/dashboard">
             <Button variant="outline" className="rounded-xl border-slate-200 font-bold hover:bg-slate-50 transition-all shadow-sm">
               <BarChart2 className="mr-2 h-4 w-4 text-emerald-600" /> Inteligencia
             </Button>
           </Link>
+          <HistorialMunicipalOficialImportDialog />
+          <HistorialMunicipalOficial2021ImportDialog />
           <HistorialImportDialog />
+          <HistorialSeccionImportDialog />
+          <HistorialSeccion2021ImportDialog />
+          <HistorialGubernaturaSeccionalImportDialog />
+          <HistorialMunicipal2018ImportDialog />
+          <HistorialSeccion2018ImportDialog />
           <Link href="/admin/historial/nuevo">
             <Button className="rounded-xl bg-slate-900 font-bold hover:bg-slate-800 shadow-xl transition-all hover:scale-[1.02] active:scale-[0.98] text-white">
               <Plus className="mr-2 h-4 w-4" /> Nuevo registro
@@ -143,6 +163,8 @@ export default async function HistorialPage({ searchParams }: PageProps) {
                 <TableHead className="font-black text-slate-700 uppercase p-4 text-[11px] tracking-widest border-b-2 border-slate-100">Municipio</TableHead>
                 <TableHead className="font-black text-slate-700 uppercase p-4 text-[11px] tracking-widest text-center border-b-2 border-slate-100">Año</TableHead>
                 <TableHead className="font-black text-slate-700 uppercase p-4 text-[11px] tracking-widest border-b-2 border-slate-100">Resultado Sectorial</TableHead>
+                <TableHead className="font-black text-slate-700 uppercase p-4 text-[11px] tracking-widest border-b-2 border-slate-100">2° Lugar</TableHead>
+                <TableHead className="font-black text-slate-700 uppercase p-4 text-[11px] tracking-widest text-center border-b-2 border-slate-100">Margen</TableHead>
                 <TableHead className="font-black text-slate-700 uppercase p-4 text-[11px] tracking-widest text-right border-b-2 border-slate-100">Volumen Voto</TableHead>
                 <TableHead className="border-b-2 border-slate-100"></TableHead>
               </TableRow>
@@ -172,8 +194,51 @@ export default async function HistorialPage({ searchParams }: PageProps) {
                         <div className="text-[9px] font-bold text-slate-400 uppercase tracking-tight">
                           {h.partido_ganador?.nombre}
                         </div>
+                        <div className="mt-1">
+                          <Badge variant="outline" className="bg-white border-slate-200 text-[8px] font-black uppercase tracking-widest">
+                            {h.source === "oficial_municipal" ? "Oficial" : "Legacy"}
+                          </Badge>
+                        </div>
                       </div>
                     </div>
+                  </TableCell>
+                  <TableCell className="p-4">
+                    {h.segundo_lugar ? (
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="h-3 w-3 rounded-full border border-slate-200 shrink-0 shadow-sm"
+                          style={{ backgroundColor: h.segundo_lugar.color || '#cbd5e1' }}
+                        />
+                        <div>
+                          <div className="font-black text-slate-700 leading-tight uppercase text-xs">
+                            {h.segundo_lugar.siglas}
+                          </div>
+                          <div className="text-[10px] font-bold text-slate-400">
+                            {Number(h.segundo_lugar.votos).toLocaleString()} v.
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <span className="text-[10px] text-slate-300 font-bold uppercase">—</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-center p-4">
+                    {h.margen_porcentual != null ? (
+                      <Badge
+                        variant="outline"
+                        className={`font-black text-[10px] px-2 ${
+                          h.margen_porcentual >= 20
+                            ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                            : h.margen_porcentual >= 8
+                            ? "bg-amber-50 border-amber-200 text-amber-700"
+                            : "bg-rose-50 border-rose-200 text-rose-700"
+                        }`}
+                      >
+                        {h.margen_porcentual.toFixed(1)}%
+                      </Badge>
+                    ) : (
+                      <span className="text-[10px] text-slate-300 font-bold">—</span>
+                    )}
                   </TableCell>
                   <TableCell className="text-right p-4">
                     <div className="font-black text-slate-950 italic leading-none mb-1">
@@ -190,11 +255,17 @@ export default async function HistorialPage({ searchParams }: PageProps) {
                           <LineChart className="mr-1 h-3 w-3" /> Análisis
                         </Button>
                       </Link>
-                      <Link href={`/admin/historial/${h.id}`}>
-                        <Button variant="ghost" size="sm" className="text-slate-400 hover:text-slate-950 hover:bg-slate-100 font-black uppercase text-[9px] tracking-widest rounded-lg h-8 px-3 transition-colors">
-                          <Settings2 className="mr-1 h-3 w-3" /> Ajustes
+                      {h.canEdit ? (
+                        <Link href={`/admin/historial/${h.id}`}>
+                          <Button variant="ghost" size="sm" className="text-slate-400 hover:text-slate-950 hover:bg-slate-100 font-black uppercase text-[9px] tracking-widest rounded-lg h-8 px-3 transition-colors">
+                            <Settings2 className="mr-1 h-3 w-3" /> Ajustes
+                          </Button>
+                        </Link>
+                      ) : (
+                        <Button variant="ghost" size="sm" disabled className="text-slate-300 font-black uppercase text-[9px] tracking-widest rounded-lg h-8 px-3">
+                          <Settings2 className="mr-1 h-3 w-3" /> Solo lectura
                         </Button>
-                      </Link>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>

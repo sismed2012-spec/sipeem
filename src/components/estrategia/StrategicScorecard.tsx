@@ -4,9 +4,7 @@ import { Card } from "@/components/ui/card";
 import { 
   ShieldAlert, 
   Target, 
-  TrendingUp, 
   AlertTriangle, 
-  CheckCircle2, 
   Clock 
 } from "lucide-react";
 import { cn } from "@/lib/utils";

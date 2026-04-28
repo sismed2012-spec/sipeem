@@ -130,7 +130,13 @@ export async function queryLayer(
     if (code === 498 || code === 499) {
       throw new Error("Token ArcGIS inválido");
     }
-    throw new Error(json.error.message ?? JSON.stringify(json.error));
+    const detail = Array.isArray(json.error.details)
+      ? json.error.details.filter(Boolean).join(" | ")
+      : "";
+    throw new Error(
+      [json.error.message, detail].filter(Boolean).join(" | ") ||
+        JSON.stringify(json.error)
+    );
   }
 
   return json as GeoJSON.FeatureCollection;

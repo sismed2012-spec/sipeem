@@ -14,6 +14,14 @@ import type {
   HistorialItem,
 } from "@/lib/inteligencia-types";
 
+const TERMOMETRO_LABELS = {
+  term1: "Fortaleza organizacional",
+  term2: "Competitividad electoral",
+  term3: "Presencia territorial",
+  term4: "Movilización",
+  term5: "Imagen pública",
+} as const;
+
 interface Props {
   mode: "municipal" | "global";
   // municipal
@@ -114,17 +122,11 @@ export default function ContextPanel({
                             Termómetros
                           </p>
                           {(
-                            [
-                              "term1",
-                              "term2",
-                              "term3",
-                              "term4",
-                              "term5",
-                            ] as const
-                          ).map((k, i) => (
+                            ["term1", "term2", "term3", "term4", "term5"] as const
+                          ).map((k) => (
                             <div key={k} className="flex items-center gap-2">
-                              <span className="text-[10px] text-slate-500 w-5">
-                                T{i + 1}
+                              <span className="text-[10px] text-slate-500 w-24 truncate">
+                                {TERMOMETRO_LABELS[k]}
                               </span>
                               <div className="flex-1 h-1.5 bg-slate-100 rounded-full">
                                 <div

@@ -63,8 +63,11 @@ export async function createUsuario(data: { nombre: string; email: string; rol: 
   // Basic input validation
   try {
     validateUserData(data);
-  } catch (e: any) {
-    return { success: false, error: e.message };
+  } catch (e: unknown) {
+    return {
+      success: false,
+      error: e instanceof Error ? e.message : "Error de validación",
+    };
   }
 
   const service = createServiceClient();

@@ -23,12 +23,12 @@ export async function interpretarTermometros(municipioId: number): Promise<strin
 
   const prompt = `Analiza los siguientes termómetros políticos de un municipio del Estado de México.
 
-Los termómetros miden 5 dimensiones estratégicas clave (cada uno en escala de 0 a 100):
-- T1: ${t.term1} — Fortaleza organizacional interna
-- T2: ${t.term2} — Competitividad electoral percibida
-- T3: ${t.term3} — Presencia territorial y cobertura
-- T4: ${t.term4} — Movilización y activismo
-- T5: ${t.term5} — Imagen pública del candidato/partido
+Los termómetros miden 5 dimensiones estratégicas clave (cada una en escala de 0 a 100):
+- Fortaleza organizacional interna: ${t.term1}
+- Competitividad electoral percibida: ${t.term2}
+- Presencia territorial y cobertura: ${t.term3}
+- Movilización y activismo: ${t.term4}
+- Imagen pública del candidato/partido: ${t.term5}
 - Promedio general: ${promedio.toFixed(1)}
 
 Genera un diagnóstico político conciso con:

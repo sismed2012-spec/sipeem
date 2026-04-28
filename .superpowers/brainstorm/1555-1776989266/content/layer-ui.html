@@ -1,0 +1,85 @@
+<h2>¿Cómo controla el usuario las 5 capas ArcGIS?</h2>
+<p class="subtitle">ENTIDAD=1 feature · DISTRITO_FEDERAL ≈30 · DISTRITO_LOCAL ≈45 · MUNICIPIO=125 · SECCION=7,052</p>
+
+<div class="options">
+
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Selector de capa única — solo una capa activa a la vez</h3>
+      <div class="mockup" style="margin-top:10px">
+        <div class="mockup-header">Vista: /mapa</div>
+        <div class="mockup-body" style="display:flex;gap:0;min-height:180px">
+          <div style="width:160px;background:#1e293b;padding:12px;flex-shrink:0;border-right:1px solid #334155">
+            <div style="color:#94a3b8;font-size:10px;text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px">Capa activa</div>
+            <div style="background:#3b82f6;color:#fff;padding:6px 10px;border-radius:6px;font-size:12px;margin-bottom:4px">● Municipio</div>
+            <div style="color:#64748b;padding:6px 10px;font-size:12px;margin-bottom:4px;cursor:pointer">○ Sección</div>
+            <div style="color:#64748b;padding:6px 10px;font-size:12px;margin-bottom:4px;cursor:pointer">○ Dto. Federal</div>
+            <div style="color:#64748b;padding:6px 10px;font-size:12px;margin-bottom:4px;cursor:pointer">○ Dto. Local</div>
+            <div style="color:#64748b;padding:6px 10px;font-size:12px;cursor:pointer">○ Entidad</div>
+          </div>
+          <div style="flex:1;background:#f1f5f9;display:flex;align-items:center;justify-content:center;font-size:12px;color:#64748b;flex-direction:column;gap:6px">
+            <div style="width:120px;height:100px;background:#e2e8f0;border-radius:8px;border:2px solid #cbd5e1;display:flex;align-items:center;justify-content:center;font-size:11px;color:#94a3b8">Mapa MUNICIPIO<br>125 polígonos</div>
+          </div>
+        </div>
+      </div>
+      <p style="margin-top:8px;font-size:13px">Seleccionas una capa y el mapa la muestra completa. Cambiar a SECCION carga los 7,052 features del municipio seleccionado o de todo el estado.</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Capas superpuestas — MUNICIPIO base + overlay configurable</h3>
+      <div class="mockup" style="margin-top:10px">
+        <div class="mockup-header">Vista: /mapa</div>
+        <div class="mockup-body" style="display:flex;gap:0;min-height:180px">
+          <div style="flex:1;background:#f1f5f9;position:relative;display:flex;align-items:center;justify-content:center">
+            <div style="width:130px;height:110px;background:#e2e8f0;border-radius:8px;border:2px solid #3b82f6;display:flex;align-items:center;justify-content:center;font-size:11px;color:#3b82f6;text-align:center">Municipios<br><span style="color:#94a3b8;font-size:10px">capa base fija</span></div>
+            <div style="position:absolute;top:12px;right:12px;background:#1e293b;border-radius:8px;padding:8px 12px;font-size:11px;color:#fff">
+              <div style="color:#94a3b8;font-size:9px;text-transform:uppercase;margin-bottom:6px">Overlay</div>
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><span style="color:#f59e0b">▣</span> Dto. Federal</div>
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><span style="color:#64748b">□</span> Dto. Local</div>
+              <div style="display:flex;align-items:center;gap:6px"><span style="color:#64748b">□</span> Sección*</div>
+              <div style="color:#475569;font-size:9px;margin-top:6px">*solo municipio activo</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p style="margin-top:8px;font-size:13px">MUNICIPIO siempre visible como base. Encimas (distritos, secciones) se activan/desactivan con checkboxes. SECCION solo carga del municipio seleccionado — no los 7,052 de golpe.</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Zoom inteligente — capas automáticas por nivel de zoom</h3>
+      <div class="mockup" style="margin-top:10px">
+        <div class="mockup-header">Vista: /mapa — comportamiento automático</div>
+        <div class="mockup-body" style="padding:12px">
+          <div style="display:flex;gap:8px;font-size:11px">
+            <div style="flex:1;background:#dbeafe;border-radius:6px;padding:8px;border:1px solid #93c5fd;text-align:center">
+              <div style="font-weight:bold;color:#1d4ed8">Zoom lejano</div>
+              <div style="color:#3b82f6;margin-top:4px">Entidad + Municipios</div>
+              <div style="color:#93c5fd;font-size:10px">vista estado completo</div>
+            </div>
+            <div style="display:flex;align-items:center;color:#64748b">→</div>
+            <div style="flex:1;background:#fef3c7;border-radius:6px;padding:8px;border:1px solid #fcd34d;text-align:center">
+              <div style="font-weight:bold;color:#92400e">Zoom medio</div>
+              <div style="color:#b45309;margin-top:4px">+ Distritos</div>
+              <div style="color:#fcd34d;font-size:10px">al acercarse</div>
+            </div>
+            <div style="display:flex;align-items:center;color:#64748b">→</div>
+            <div style="flex:1;background:#dcfce7;border-radius:6px;padding:8px;border:1px solid #86efac;text-align:center">
+              <div style="font-weight:bold;color:#166534">Zoom cercano</div>
+              <div style="color:#16a34a;margin-top:4px">+ Secciones</div>
+              <div style="color:#86efac;font-size:10px">un municipio a la vez</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p style="margin-top:8px;font-size:13px">El mapa decide qué mostrar según el nivel de zoom. Sin controles manuales — la experiencia es fluida y automática. Secciones solo aparecen cuando el usuario ya acercó la vista a un municipio.</p>
+    </div>
+  </div>
+
+</div>

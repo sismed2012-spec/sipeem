@@ -35,23 +35,21 @@ export default function HistorialFilters({
   const [isPending, startTransition] = useTransition();
   const [searchValue, setSearchValue] = useState(currentParams.q || "");
 
+  const [selectedMunicipio, setSelectedMunicipio] = useState<string>("");
+  const [selectedAnio, setSelectedAnio] = useState<string>("");
+  const [selectedGanador, setSelectedGanador] = useState<string>("");
+
   useEffect(() => {
-    const delayDebounceFn = setTimeout(() => {
-      if (searchValue !== (currentParams.q || "")) {
-        updateParams("q", searchValue);
-      }
-    }, 400);
+    setSelectedMunicipio(currentParams.municipioId || "");
+    setSelectedAnio(currentParams.anio || "");
+    setSelectedGanador(currentParams.partidoId || "");
+  }, [currentParams.municipioId, currentParams.anio, currentParams.partidoId]);
 
-    return () => clearTimeout(delayDebounceFn);
-  }, [searchValue, currentParams.q]);
-
-  const currentYear = new Date().getFullYear();
-  const years = Array.from({ length: 40 }, (_, i) => currentYear - i);
-
-  function updateParams(key: string, value: string) {
+  function pushParams(key: string, value: string) {
     const params = new URLSearchParams(searchParams);
+    params.delete("page");
 
-    if (value && value !== "all") {
+    if (value && value !== "" && value !== "all") {
       params.set(key, value);
     } else {
       params.delete(key);
@@ -62,8 +60,39 @@ export default function HistorialFilters({
     });
   }
 
+  useEffect(() => {
+    function pushSearchQuery(value: string) {
+      const params = new URLSearchParams(searchParams);
+      params.delete("page");
+
+      if (value) {
+        params.set("q", value);
+      } else {
+        params.delete("q");
+      }
+
+      startTransition(() => {
+        router.push(`/admin/historial?${params.toString()}`);
+      });
+    }
+
+    const delayDebounceFn = setTimeout(() => {
+      if (searchValue !== (currentParams.q || "")) {
+        pushSearchQuery(searchValue);
+      }
+    }, 400);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchValue, currentParams.q, router, searchParams, startTransition]);
+
+  const currentYear = new Date().getFullYear();
+  const years = Array.from({ length: 40 }, (_, i) => currentYear - i);
+
   function clearFilters() {
     setSearchValue("");
+    setSelectedMunicipio("");
+    setSelectedAnio("");
+    setSelectedGanador("");
     startTransition(() => {
       router.push("/admin/historial");
     });
@@ -92,14 +121,25 @@ export default function HistorialFilters({
         </div>
 
         <Select
-          defaultValue={currentParams.municipioId || "all"}
-          onValueChange={(val) => updateParams("municipioId", val ?? "all")}
+          value={selectedMunicipio}
+          onValueChange={(val) => {
+            setSelectedMunicipio(val || "");
+            if (val) {
+              pushParams("municipioId", val);
+            } else {
+              pushParams("municipioId", "");
+            }
+          }}
         >
-          <SelectTrigger className="rounded-xl border-slate-200 bg-white">
-            <SelectValue placeholder="Municipio" />
+          <SelectTrigger className="w-full rounded-xl border-slate-200 bg-white h-11">
+            <SelectValue placeholder="Municipio">
+              {selectedMunicipio && selectedMunicipio !== "all"
+                ? municipios.find((m) => m.id.toString() === selectedMunicipio)?.nombre
+                : "Municipio"}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent className="rounded-xl">
-            <SelectItem value="all">Filtro: Municipio</SelectItem>
+            <SelectItem value="">Todos los municipios</SelectItem>
             {municipios.map((m) => (
               <SelectItem key={m.id} value={m.id.toString()}>
                 {m.nombre}
@@ -109,14 +149,23 @@ export default function HistorialFilters({
         </Select>
 
         <Select
-          defaultValue={currentParams.anio || "all"}
-          onValueChange={(val) => updateParams("anio", val ?? "all")}
+          value={selectedAnio}
+          onValueChange={(val) => {
+            setSelectedAnio(val || "");
+            if (val) {
+              pushParams("anio", val);
+            } else {
+              pushParams("anio", "");
+            }
+          }}
         >
-          <SelectTrigger className="rounded-xl border-slate-200 bg-white">
-            <SelectValue placeholder="Año" />
+          <SelectTrigger className="w-full rounded-xl border-slate-200 bg-white h-11">
+            <SelectValue placeholder="Año">
+              {selectedAnio && selectedAnio !== "all" ? selectedAnio : "Año"}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent className="rounded-xl shadow-2xl">
-            <SelectItem value="all">Filtro: Año</SelectItem>
+            <SelectItem value="">Todos los años</SelectItem>
             {years.map((y) => (
               <SelectItem key={y} value={y.toString()}>
                 {y}
@@ -126,14 +175,25 @@ export default function HistorialFilters({
         </Select>
 
         <Select
-          defaultValue={currentParams.partidoId || "all"}
-          onValueChange={(val) => updateParams("partidoId", val ?? "all")}
+          value={selectedGanador}
+          onValueChange={(val) => {
+            setSelectedGanador(val || "");
+            if (val) {
+              pushParams("partidoId", val);
+            } else {
+              pushParams("partidoId", "");
+            }
+          }}
         >
-          <SelectTrigger className="rounded-xl border-slate-200 bg-white">
-            <SelectValue placeholder="Fuerza ganadora" />
+          <SelectTrigger className="w-full rounded-xl border-slate-200 bg-white h-11 px-3 truncate">
+            <SelectValue placeholder="Ganador">
+              {selectedGanador && selectedGanador !== "all"
+                ? partidos.find((p) => p.id.toString() === selectedGanador)?.nombre
+                : "Ganador"}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent className="rounded-xl">
-            <SelectItem value="all">Filtro: Ganador</SelectItem>
+            <SelectItem value="">Todos los ganadores</SelectItem>
             {partidos.map((p) => (
               <SelectItem key={p.id} value={p.id.toString()}>
                 <div className="flex items-center gap-2">
