@@ -8,6 +8,7 @@ import {
   readIterArchive,
 } from "./demografia/iter-parser.mjs";
 import { assertExpectedIterProfile, buildIterProfile } from "./demografia/profile.mjs";
+import { buildAggregateBatch } from "./demografia/aggregate.mjs";
 import { buildCrosswalkBatch } from "./demografia/crosswalk.mjs";
 import {
   buildIndicatorBatches,
@@ -73,6 +74,17 @@ export function withCrosswalkBatch(prepared, cartographyVersionId) {
   };
 }
 
+export function withAggregateBatch(prepared, cartographyVersionId) {
+  if (cartographyVersionId == null) return prepared;
+  return {
+    ...prepared,
+    batches: [
+      ...prepared.batches,
+      buildAggregateBatch({ sourceHash: prepared.sourceHash, cartographyVersionId }),
+    ],
+  };
+}
+
 export async function prepareImportPackage(zipPath, options = {}) {
   const archive = await readIterArchive(zipPath);
   const profile = assertExpectedIterProfile(buildIterProfile(archive));
@@ -93,8 +105,11 @@ export async function prepareImportPackage(zipPath, options = {}) {
     ...buildIndicatorBatches(indicators, { sourceHash: archive.sourceHash }),
     ...buildLocalityBatches(localities, { sourceHash: archive.sourceHash }),
   ];
-  return withCrosswalkBatch(
-    { sourceHash: archive.sourceHash, profile: sourceProfile, batches },
+  return withAggregateBatch(
+    withCrosswalkBatch(
+      { sourceHash: archive.sourceHash, profile: sourceProfile, batches },
+      options.cartographyVersionId
+    ),
     options.cartographyVersionId
   );
 }

@@ -7,6 +7,7 @@ import test from "node:test";
 import {
   parseImportArgs,
   runImport,
+  withAggregateBatch,
   withCrosswalkBatch,
   writeImportArtifacts,
 } from "./import-inegi-demografia.mjs";
@@ -66,6 +67,22 @@ test("withCrosswalkBatch appends a version-scoped stage without mutating canonic
 
   assert.equal(prepared.batches.length, 1);
   assert.deepEqual(result.batches.map(({ id }) => id), ["FUENTE:1-1", "CORRESPONDENCIAS:V4025"]);
+});
+
+test("withAggregateBatch appends aggregation after the reviewed crosswalk", () => {
+  const prepared = withCrosswalkBatch({
+    sourceHash: "a".repeat(64),
+    profile: {},
+    batches: [{ id: "FUENTE:1-1" }],
+  }, 4025);
+
+  const result = withAggregateBatch(prepared, 4025);
+
+  assert.deepEqual(result.batches.map(({ id }) => id), [
+    "FUENTE:1-1",
+    "CORRESPONDENCIAS:V4025",
+    "AGREGACION:V4025",
+  ]);
 });
 
 test("writeImportArtifacts writes deterministic SQL files and a secret-free manifest", async () => {
