@@ -1,0 +1,6 @@
+.artifacts/
+.next/
+node_modules/
+supabase/.temp/
+*.zip
+*.xlsx
