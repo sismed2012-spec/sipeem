@@ -103,15 +103,15 @@ runner.
 - Produces: `demografia_eceg_secciones` y
   `demografia_eceg_correspondencias`.
 
-- [ ] Crear la migración con `npm.cmd exec supabase -- migration new
+- [x] Crear la migración con `npm.cmd exec supabase -- migration new
   create_demografia_eceg_model`.
-- [ ] Escribir primero el contrato SQL fallido para unicidad, checks, estados,
+- [x] Escribir primero el contrato SQL fallido para unicidad, checks, estados,
   claves foráneas, RLS y grants.
-- [ ] Implementar tablas, índices y extensiones de etapas de lote.
-- [ ] Probar transaccionalmente que una sección origen solo puede tener un
+- [x] Implementar tablas, índices y extensiones de etapas de lote.
+- [x] Probar transaccionalmente que una sección origen solo puede tener un
   destino automático y que `SIN_EQUIVALENCIA` no tiene destino.
-- [ ] Ejecutar la suite SQL sin publicar y obtener PASS.
-- [ ] Commit: `feat: add canonical ECEG demographic schema`.
+- [x] Ejecutar la suite SQL sin publicar y obtener PASS.
+- [x] Commit: `feat: add canonical ECEG demographic schema`.
 
 ## Task 3: Build Resumable ECEG Batches and Correspondences
 
