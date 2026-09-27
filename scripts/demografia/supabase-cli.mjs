@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import path from "node:path";
 
 export const DEV_PROJECT_REF = "nppvprbfmjbhwheghipa";
 
@@ -14,6 +15,22 @@ export function buildSupabaseDbQueryArgs(filePath, projectRef) {
     "exec", "supabase", "--", "db", "query", "--linked",
     "--project-ref", projectRef, "--file", filePath,
   ];
+}
+
+export function buildNpmExecInvocation(args, {
+  platform = process.platform,
+  execPath = process.execPath,
+  npmExecPath = process.env.npm_execpath,
+} = {}) {
+  if (platform !== "win32") return { command: "npm", args };
+
+  const npmCliPath = npmExecPath?.toLowerCase().endsWith(".js")
+    ? npmExecPath
+    : path.join(path.dirname(execPath), "node_modules", "npm", "bin", "npm-cli.js");
+  return {
+    command: execPath,
+    args: [npmCliPath, ...args],
+  };
 }
 
 export function runCommandOnce(command, args) {
@@ -52,8 +69,9 @@ export async function executeManifest(manifest, {
       skipped.push(batch.id);
       continue;
     }
-    const args = buildSupabaseDbQueryArgs(batch.filePath, projectRef);
-    const result = await runCommand("npm.cmd", args);
+    const npmArgs = buildSupabaseDbQueryArgs(batch.filePath, projectRef);
+    const invocation = buildNpmExecInvocation(npmArgs);
+    const result = await runCommand(invocation.command, invocation.args);
     if (result.exitCode !== 0) {
       throw new Error(
         `Batch ${batch.id} failed; resume checksum ${batch.checksum}. No automatic retry was attempted.`

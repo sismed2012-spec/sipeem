@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   DEV_PROJECT_REF,
+  buildNpmExecInvocation,
   buildSupabaseDbQueryArgs,
   executeManifest,
 } from "./supabase-cli.mjs";
@@ -33,6 +34,24 @@ test("buildSupabaseDbQueryArgs pins the exact DEV project and SQL file", () => {
   );
 });
 
+test("buildNpmExecInvocation bypasses cmd shims on Windows", () => {
+  assert.deepEqual(
+    buildNpmExecInvocation(["exec", "supabase"], {
+      platform: "win32",
+      execPath: "C:\\Program Files\\nodejs\\node.exe",
+      npmExecPath: "C:\\Program Files\\nodejs\\node_modules\\npm\\bin\\npm-cli.js",
+    }),
+    {
+      command: "C:\\Program Files\\nodejs\\node.exe",
+      args: [
+        "C:\\Program Files\\nodejs\\node_modules\\npm\\bin\\npm-cli.js",
+        "exec",
+        "supabase",
+      ],
+    }
+  );
+});
+
 test("executeManifest dry-run never starts an external process", async () => {
   let calls = 0;
   const result = await executeManifest(manifest, {
@@ -60,7 +79,7 @@ test("executeManifest skips locally confirmed checksums and runs the next batch 
   });
 
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].command, "npm.cmd");
+  assert.notEqual(calls[0].command.toLowerCase(), "npm.cmd");
   assert.match(calls[0].args.at(-1), /b2\.sql$/);
   assert.deepEqual(confirmed, ["b".repeat(64)]);
   assert.deepEqual(result.skipped, ["b1"]);
