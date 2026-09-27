@@ -7,6 +7,7 @@ import {
   MapAnalyticsDTO,
 } from "@/actions/analytics";
 import { EdomexInteractiveMap } from "./EdomexInteractiveMap";
+import { CartografiaVersionSelector } from "./CartografiaVersionSelector";
 import { MapLegend } from "./MapLegend";
 import { LayerPanel, type OverlayKey } from "./LayerPanel";
 import { Button } from "@/components/ui/button";
@@ -35,6 +36,13 @@ import {
 } from "lucide-react";
 import { getCoberturaByMunicipio } from "@/actions/estructura";
 import { createClient } from "@/lib/supabase/client";
+import {
+  buildVersionedSectionsUrl,
+  clearSectionOverlay,
+  normalizeMunicipioClave,
+  selectInitialCartografiaVersion,
+} from "@/lib/cartografia-map";
+import type { CartografiaVersion } from "@/lib/cartografia-versionada";
 
 type MapFeatureCollection = GeoJSON.FeatureCollection<
   GeoJSON.Geometry,
@@ -51,13 +59,6 @@ interface CoberturaRealtimeRecord {
 interface SelectedMunicipioContext {
   geoId: string | number | null;
   municipioId: number | null;
-}
-
-function encodeWhereValue(value: string | number) {
-  if (typeof value === "number") return String(value);
-  const trimmed = value.trim();
-  if (/^\d+$/.test(trimmed)) return trimmed;
-  return `'${trimmed.replace(/'/g, "''")}'`;
 }
 
 export function ElectoralMapContainer({
@@ -77,6 +78,16 @@ export function ElectoralMapContainer({
   const [overlayData, setOverlayData] = useState<OverlayDataMap>({});
   const [selectedMunicipio, setSelectedMunicipio] =
     useState<SelectedMunicipioContext | null>(null);
+  const [cartografiaVersions, setCartografiaVersions] = useState<
+    CartografiaVersion[]
+  >([]);
+  const [selectedCartografiaVersionId, setSelectedCartografiaVersionId] =
+    useState<number | null>(null);
+  const [cartografiaLoading, setCartografiaLoading] = useState(true);
+  const [cartografiaError, setCartografiaError] = useState<string | null>(null);
+  const [sectionError, setSectionError] = useState<string | null>(null);
+  const [cartografiaRefreshKey, setCartografiaRefreshKey] = useState(0);
+  const [sectionRefreshKey, setSectionRefreshKey] = useState(0);
   const [coberturaMap, setCoberturaMap] = useState<Record<number, { compromisos: number; meta: number }>>({});
   const [legendOpen, setLegendOpen] = useState(false);
   const [layersOpen, setLayersOpen] = useState(false);
@@ -98,30 +109,80 @@ export function ElectoralMapContainer({
       .finally(() => setDataLoading(false));
   }, [selectedYear, isAnalytic]);
 
+  useEffect(() => {
+    const controller = new AbortController();
+
+    fetch("/api/cartografia/versiones", { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("catalogo no disponible");
+        const payload = (await response.json()) as unknown;
+        if (!Array.isArray(payload)) throw new Error("catalogo invalido");
+        return payload as CartografiaVersion[];
+      })
+      .then((versions) => {
+        const initialVersion = selectInitialCartografiaVersion(versions);
+        setCartografiaVersions(versions);
+        setSelectedCartografiaVersionId((current) =>
+          current != null && versions.some((version) => version.id === current)
+            ? current
+            : initialVersion?.id ?? null
+        );
+        setCartografiaError(
+          initialVersion ? null : "No hay versiones cartográficas disponibles"
+        );
+      })
+      .catch((fetchError: unknown) => {
+        if (fetchError instanceof DOMException && fetchError.name === "AbortError") {
+          return;
+        }
+        setCartografiaError("No se pudo cargar el catálogo cartográfico");
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setCartografiaLoading(false);
+      });
+
+    return () => controller.abort();
+  }, [cartografiaRefreshKey]);
+
   const seccionOverlayActive = activeOverlays.has("seccion");
 
   useEffect(() => {
-    if (!activeOverlays.has("seccion")) return;
+    if (!seccionOverlayActive) return;
 
-    const geoId = selectedMunicipio?.geoId ?? null;
-    if (!geoId) {
-      setOverlayData((current) => {
-        if (!current.seccion) return current;
-        const next = { ...current };
-        delete next.seccion;
-        return next;
-      });
-      return;
-    }
+    setOverlayData((current) => clearSectionOverlay(current));
+    setSectionError(null);
 
-    const encodedValue = encodeWhereValue(geoId);
-    fetch(`/api/arcgis/seccion?returnGeometry=true&where=MUNICIPIO=${encodedValue}`)
-      .then((r) => r.json())
-      .then((data: MapFeatureCollection) =>
-        setOverlayData((d) => ({ ...d, seccion: data }))
+    const municipio = normalizeMunicipioClave(selectedMunicipio?.geoId);
+    if (!municipio || selectedCartografiaVersionId == null) return;
+
+    const controller = new AbortController();
+    const url = buildVersionedSectionsUrl({
+      versionId: selectedCartografiaVersionId,
+      municipio,
+    });
+
+    fetch(url, { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("secciones no disponibles");
+        return (await response.json()) as MapFeatureCollection;
+      })
+      .then((data) =>
+        setOverlayData((current) => ({ ...current, seccion: data }))
       )
-      .catch(console.error);
-  }, [selectedMunicipio, activeOverlays]);
+      .catch((fetchError: unknown) => {
+        if (fetchError instanceof DOMException && fetchError.name === "AbortError") {
+          return;
+        }
+        setSectionError("No se pudieron cargar las secciones de esta versión");
+      });
+
+    return () => controller.abort();
+  }, [
+    selectedMunicipio?.geoId,
+    selectedCartografiaVersionId,
+    seccionOverlayActive,
+    sectionRefreshKey,
+  ]);
 
   useEffect(() => {
     const id = selectedMunicipio?.municipioId ?? null;
@@ -217,12 +278,11 @@ export function ElectoralMapContainer({
       // seccion is lazy — only load if a municipio is selected
       if (key === "seccion" && !selectedMunicipio?.geoId) return;
 
-      let url = `/api/arcgis/${key}?returnGeometry=true`;
-      if (key === "seccion") {
-        const selectedValue = selectedMunicipio?.geoId;
-        if (selectedValue == null) return;
-        url += `&where=MUNICIPIO=${encodeWhereValue(selectedValue)}`;
-      }
+      // La capa seccional versionada se carga en el efecto que también cancela
+      // solicitudes obsoletas cuando cambia municipio o versión.
+      if (key === "seccion") return;
+
+      const url = `/api/arcgis/${key}?returnGeometry=true`;
 
       try {
         const res = await fetch(url);
@@ -246,6 +306,24 @@ export function ElectoralMapContainer({
       toggleOverlay("seccion");
     }
   }, [activeOverlays, toggleOverlay]);
+
+  const handleCartografiaVersionChange = useCallback((versionId: number) => {
+    setSelectedCartografiaVersionId(versionId);
+    setOverlayData((current) => clearSectionOverlay(current));
+    setSectionError(null);
+  }, []);
+
+  const handleCartografiaRetry = useCallback(() => {
+    if (cartografiaError) {
+      setCartografiaLoading(true);
+      setCartografiaError(null);
+      setCartografiaRefreshKey((current) => current + 1);
+      return;
+    }
+
+    setSectionError(null);
+    setSectionRefreshKey((current) => current + 1);
+  }, [cartografiaError]);
 
   if (error) {
     return (
@@ -347,9 +425,10 @@ export function ElectoralMapContainer({
         </aside>
       )}
 
-      {isAnalytic && (
-        <div className="border-b border-slate-200 bg-white px-4 py-4 shadow-sm 2xl:hidden">
-          <div className="flex flex-col gap-4">
+      <div className="border-b border-slate-200 bg-white px-4 py-4 shadow-sm 2xl:hidden">
+        <div className="flex flex-col gap-4">
+          {isAnalytic && (
+            <>
             <div className="flex items-start justify-between gap-3">
               <div>
                 <div className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
@@ -380,8 +459,27 @@ export function ElectoralMapContainer({
                 </div>
               </Card>
             </div>
+            </>
+          )}
 
-            <div className="grid grid-cols-[1fr_auto_auto] gap-2">
+          <CartografiaVersionSelector
+            versions={cartografiaVersions}
+            selectedVersionId={selectedCartografiaVersionId}
+            loading={cartografiaLoading}
+            error={cartografiaError ?? sectionError}
+            onChange={handleCartografiaVersionChange}
+            onRetry={handleCartografiaRetry}
+            className="shadow-none"
+          />
+
+          <div
+            className={
+              isAnalytic
+                ? "grid grid-cols-[1fr_auto_auto] gap-2"
+                : "flex justify-end"
+            }
+          >
+            {isAnalytic && (
               <Select
                 value={selectedYear}
                 onValueChange={(v) => setSelectedYear(v ?? "")}
@@ -400,7 +498,9 @@ export function ElectoralMapContainer({
                   ))}
                 </SelectContent>
               </Select>
+            )}
 
+            {isAnalytic && (
               <Button
                 variant="outline"
                 className="h-11 px-3"
@@ -409,18 +509,18 @@ export function ElectoralMapContainer({
                 <List className="h-4 w-4" />
                 Leyenda
               </Button>
-              <Button
-                variant="outline"
-                className="h-11 px-3"
-                onClick={() => setLayersOpen(true)}
-              >
-                <Layers3 className="h-4 w-4" />
-                Capas
-              </Button>
-            </div>
+            )}
+            <Button
+              variant="outline"
+              className="h-11 px-3"
+              onClick={() => setLayersOpen(true)}
+            >
+              <Layers3 className="h-4 w-4" />
+              Capas
+            </Button>
           </div>
         </div>
-      )}
+      </div>
 
       <main className="relative min-h-[68vh] flex-1 overflow-hidden bg-slate-100 shadow-inner 2xl:min-h-0">
         <EdomexInteractiveMap
@@ -431,6 +531,7 @@ export function ElectoralMapContainer({
           onMunicipioSelect={setSelectedMunicipio}
           onVerSecciones={handleVerSecciones}
           coberturaMap={coberturaMap}
+          cartografiaVersionId={selectedCartografiaVersionId}
         />
 
         {isAnalytic && (
@@ -440,13 +541,23 @@ export function ElectoralMapContainer({
           />
         )}
 
-        <LayerPanel
-          activeOverlays={activeOverlays}
-          onToggle={toggleOverlay}
-          hasMunicipioSelected={selectedMunicipio?.geoId != null}
-          coberturaMap={coberturaMap}
-          className="absolute right-4 top-4 z-20 hidden 2xl:block"
-        />
+        <div className="absolute right-4 top-4 z-20 hidden w-72 flex-col gap-3 2xl:flex">
+          <CartografiaVersionSelector
+            versions={cartografiaVersions}
+            selectedVersionId={selectedCartografiaVersionId}
+            loading={cartografiaLoading}
+            error={cartografiaError ?? sectionError}
+            onChange={handleCartografiaVersionChange}
+            onRetry={handleCartografiaRetry}
+          />
+          <LayerPanel
+            activeOverlays={activeOverlays}
+            onToggle={toggleOverlay}
+            hasMunicipioSelected={selectedMunicipio?.geoId != null}
+            sectionAvailable={selectedCartografiaVersionId != null}
+            coberturaMap={coberturaMap}
+          />
+        </div>
 
         {!isAnalytic && (
           <div className="absolute top-6 left-6 z-10 w-full max-w-sm pointer-events-none">
@@ -489,6 +600,7 @@ export function ElectoralMapContainer({
               activeOverlays={activeOverlays}
               onToggle={toggleOverlay}
               hasMunicipioSelected={selectedMunicipio?.geoId != null}
+              sectionAvailable={selectedCartografiaVersionId != null}
               coberturaMap={coberturaMap}
               className="min-w-0 shadow-none ring-0"
             />
