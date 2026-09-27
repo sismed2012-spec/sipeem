@@ -133,6 +133,13 @@ test("generated PostGIS SQL uses longitude before latitude and persists all sign
   assert.match(batch.sql, /similitud_nombre/i);
   assert.match(batch.sql, /candidateIds|candidate_ids/i);
   assert.match(batch.sql, /greatest\(0::double precision,/i);
+  assert.match(batch.sql, /named_candidates as[\s\S]*eligible_name_candidates as/i);
+  assert.match(batch.sql, /eligible_name_candidates[\s\S]*where named\.similitud_nombre >= 0\.72/i);
+  assert.ok(
+    batch.sql.indexOf("where named.similitud_nombre >= 0.72")
+      < batch.sql.indexOf("extensions.st_distance(named.source_point"),
+    "name eligibility must be applied before expensive geography distance calculations"
+  );
   assert.doesNotMatch(batch.sql, /pg_catalog\.greatest/i);
   assert.doesNotMatch(batch.sql, /proporcion_localidad\s*>\s*0\s*and\s*estado\s*=\s*'DIRECTA'/i);
 });

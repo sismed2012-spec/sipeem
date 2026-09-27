@@ -218,14 +218,13 @@ with source_rows as (
     order by m.cartografia_municipio_id
     limit 1
   ) m on true
-), locality_candidates as (
+), named_candidates as (
   select
     src.*,
     l.cartografia_limite_localidad_id,
     l.nombre as candidate_name,
     l.clave_localidad_fuente as candidate_code,
     l.geom,
-    extensions.st_distance(src.source_point::extensions.geography, l.geom::extensions.geography) as distancia_metros,
     case
       when ${normalized("src.nombre_localidad")} = ${normalized("l.nombre")} then 1.0
       when ${normalized("l.nombre")} like '%' || ${normalized("src.nombre_localidad")} || '%'
@@ -236,7 +235,16 @@ with source_rows as (
   join public.cartografia_limites_localidad l
     on l.cartografia_version_id = ${cartographyVersionId}
    and l.cartografia_municipio_id = src.cartografia_municipio_id
-   and extensions.st_dwithin(src.source_point::extensions.geography, l.geom::extensions.geography, ${maxDistanceMeters})
+), eligible_name_candidates as (
+  select named.*
+  from named_candidates named
+  where named.similitud_nombre >= ${minimumNameScore}
+), locality_candidates as (
+  select
+    named.*,
+    extensions.st_distance(named.source_point::extensions.geography, named.geom::extensions.geography) as distancia_metros
+  from eligible_name_candidates named
+  where extensions.st_dwithin(named.source_point::extensions.geography, named.geom::extensions.geography, ${maxDistanceMeters})
 ), ranked as (
   select c.*,
     (c.similitud_nombre * 0.8 + greatest(0::double precision, 1 - c.distancia_metros / ${maxDistanceMeters}) * 0.2) as confianza,
