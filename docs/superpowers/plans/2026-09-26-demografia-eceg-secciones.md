@@ -172,12 +172,12 @@ runner.
 - Consumes: migraciones, manifiesto y suite verde de Tasks 1–5.
 - Produces: fuente ECEG validada y publicada solo en SIPEEM-DEV.
 
-- [ ] Ejecutar gate local completo y `git diff --check`.
-- [ ] Repetir el preflight de solo lectura y verificar proyecto/version `4025`.
-- [ ] Aplicar únicamente las dos migraciones revisadas a DEV.
-- [ ] Ejecutar una sola importación; detenerse al primer lote fallido sin retry.
-- [ ] Ejecutar correspondencias y postflight de solo lectura.
-- [ ] Verificar 6,544 fuente, 6,401 vínculos históricos, 143 sin equivalencia,
+- [x] Ejecutar gate local completo y `git diff --check`.
+- [x] Repetir el preflight de solo lectura y verificar proyecto/version `4025`.
+- [x] Aplicar únicamente las dos migraciones revisadas a DEV.
+- [x] Ejecutar una sola importación; detenerse al primer lote fallido sin retry.
+- [x] Ejecutar correspondencias y postflight de solo lectura.
+- [x] Verificar 6,544 fuente, 6,401 vínculos históricos, 143 sin equivalencia,
   suma estatal, reservas, RLS, grants y precedencia del RPC.
 - [ ] Verificar Preview con secciones directas, fallback y no disponibles.
 - [ ] Registrar hashes, lotes, commits y URL Preview. Declarar que PROD no cambió.
