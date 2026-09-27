@@ -1,7 +1,9 @@
 # Integración demográfica INEGI por sección — Diseño
 
-**Fecha:** 2026-09-26  
-**Estado:** Aprobado en conversación  
+**Fecha:** 2026-09-26
+
+**Estado:** Aprobado en conversación
+
 **Entorno inicial:** SIPEEM-DEV (`nppvprbfmjbhwheghipa`)
 
 ## 1. Objetivo
