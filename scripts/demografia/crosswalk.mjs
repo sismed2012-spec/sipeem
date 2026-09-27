@@ -310,8 +310,10 @@ select
   chosen.similitud_nombre,
   coalesce(chosen.confianza, 0)::numeric as confianza,
   case when ss.secciones_candidatas = 1 and ss.cobertura_estricta
+    and not coalesce(cc.first_confidence - cc.second_confidence <= ${ambiguityDelta}, false)
     then (ss.section_candidates -> 0 ->> 'cartografia_seccion_id')::bigint end as cartografia_seccion_id,
   case when ss.secciones_candidatas = 1 and ss.cobertura_estricta
+    and not coalesce(cc.first_confidence - cc.second_confidence <= ${ambiguityDelta}, false)
     then (ss.section_candidates -> 0 ->> 'seccion_id')::bigint end as seccion_id,
   pg_catalog.jsonb_build_object(
     'candidate_ids', coalesce(cc.candidate_ids, '[]'::jsonb),

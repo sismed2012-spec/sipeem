@@ -140,6 +140,14 @@ test("generated PostGIS SQL uses longitude before latitude and persists all sign
       < batch.sql.indexOf("extensions.st_distance(named.source_point"),
     "name eligibility must be applied before expensive geography distance calculations"
   );
+  const guardedSectionSelections = batch.sql.match(
+    /case when ss\.secciones_candidatas = 1 and ss\.cobertura_estricta\s+and not coalesce\(cc\.first_confidence - cc\.second_confidence <= 0\.03, false\)\s+then/gi
+  ) ?? [];
+  assert.equal(
+    guardedSectionSelections.length,
+    2,
+    "only unambiguous DIRECTA rows may persist selected section identifiers"
+  );
   assert.doesNotMatch(batch.sql, /pg_catalog\.greatest/i);
   assert.doesNotMatch(batch.sql, /proporcion_localidad\s*>\s*0\s*and\s*estado\s*=\s*'DIRECTA'/i);
 });
