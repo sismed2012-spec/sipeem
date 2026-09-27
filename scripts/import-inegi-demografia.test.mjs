@@ -7,6 +7,7 @@ import test from "node:test";
 import {
   parseImportArgs,
   runImport,
+  withCrosswalkBatch,
   writeImportArtifacts,
 } from "./import-inegi-demografia.mjs";
 
@@ -32,6 +33,39 @@ test("parseImportArgs also accepts an explicit --zip flag for PowerShell usage",
     parseImportArgs(["--zip", "G:\\Mi unidad\\iter.zip", "--project-ref", DEV]),
     { zipPath: "G:\\Mi unidad\\iter.zip", projectRef: DEV, apply: false }
   );
+});
+
+test("parseImportArgs accepts one explicit cartography version for crosswalk generation", () => {
+  assert.deepEqual(
+    parseImportArgs([
+      "fixture.zip", "--project-ref", DEV, "--cartografia-version-id", "4025",
+    ]),
+    {
+      zipPath: "fixture.zip",
+      projectRef: DEV,
+      apply: false,
+      cartographyVersionId: 4025,
+    }
+  );
+  assert.throws(
+    () => parseImportArgs([
+      "fixture.zip", "--project-ref", DEV, "--cartografia-version-id", "0",
+    ]),
+    /positive integer/i
+  );
+});
+
+test("withCrosswalkBatch appends a version-scoped stage without mutating canonical batches", () => {
+  const prepared = {
+    sourceHash: "a".repeat(64),
+    profile: {},
+    batches: [{ id: "FUENTE:1-1" }],
+  };
+
+  const result = withCrosswalkBatch(prepared, 4025);
+
+  assert.equal(prepared.batches.length, 1);
+  assert.deepEqual(result.batches.map(({ id }) => id), ["FUENTE:1-1", "CORRESPONDENCIAS:V4025"]);
 });
 
 test("writeImportArtifacts writes deterministic SQL files and a secret-free manifest", async () => {
