@@ -132,7 +132,8 @@ begin
     pobtot, pobfem, estados_dato
   ) values (
     v_source_id, '15', '001', '0001', 'México', 'Acambay', 'Localidad prueba',
-    -99.8, 19.9, extensions.st_setsrid(extensions.st_makepoint(-99.8, 19.9), 4326),
+    -99.8440319, 19.9562286,
+    extensions.st_setsrid(extensions.st_makepoint(-99.8440319, 19.9562286), 4326),
     2, pg_catalog.repeat('b', 64), 0, null, '{"POBFEM":"RESERVADO"}'::jsonb
   );
 

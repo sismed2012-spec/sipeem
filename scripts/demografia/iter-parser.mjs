@@ -6,6 +6,33 @@ import { unzipSync } from "fflate";
 
 const EXPECTED_COLUMN_COUNT = 286;
 
+const TEXT_MNEMONICS = new Set([
+  "ENTIDAD",
+  "NOM_ENT",
+  "MUN",
+  "NOM_MUN",
+  "LOC",
+  "NOM_LOC",
+  "LONGITUD",
+  "LATITUD",
+  "ALTITUD",
+]);
+
+const DECIMAL_MNEMONICS = new Set([
+  "REL_H_M",
+  "PROM_HNV",
+  "GRAPROES",
+  "PROM_OCUP",
+  "PRO_OCUP_C",
+]);
+
+const SUMMARY_MNEMONICS = new Set([
+  "POBTOT", "POBFEM", "POBMAS", "POB0_14", "POB15_64", "POB65_MAS",
+  "P_18YMAS", "PEA", "POCUPADA", "P15YM_AN", "GRAPROES", "PDER_SS",
+  "PCON_DISC", "P3YM_HLI", "POB_AFRO", "TVIVHAB", "VPH_AGUADV",
+  "VPH_DRENAJ", "VPH_C_ELEC", "VPH_CEL", "VPH_PC", "VPH_INTER",
+]);
+
 const REQUIRED_MEMBERS = {
   catalog: /\/catalogos\/tam_loc\.csv\.csv$/i,
   dataset: /\/conjunto_de_datos\/conjunto_de_datos_iter_15CSV20\.csv$/i,
@@ -101,6 +128,50 @@ export function parseDmsCoordinate(raw) {
   const [, degrees, minutes, seconds, direction] = match;
   const magnitude = Number(degrees) + Number(minutes) / 60 + Number(seconds) / 3600;
   return /[SWO]/i.test(direction) ? -magnitude : magnitude;
+}
+
+export function parseIterDictionary(dictionaryText, datasetHeaders) {
+  const rows = parse(dictionaryText, {
+    bom: true,
+    relax_column_count: true,
+    skip_empty_lines: false,
+  });
+  const headerIndex = rows.findIndex(
+    (row) => String(row[0] ?? "").trim() === "Núm."
+      && String(row[3] ?? "").trim() === "Mnemónico"
+  );
+  if (headerIndex < 0) throw new Error("ITER dictionary header was not found");
+
+  const dictionaryRows = rows
+    .slice(headerIndex + 1)
+    .filter((row) => String(row[3] ?? "").trim())
+    .map((row) => ({
+      name: String(row[1] ?? "").trim(),
+      description: String(row[2] ?? "").trim() || null,
+      mnemonic: String(row[3] ?? "").trim(),
+      range: String(row[4] ?? "").trim() || null,
+      length: String(row[5] ?? "").trim() || null,
+    }));
+  const byMnemonic = new Map(dictionaryRows.map((row) => [row.mnemonic, row]));
+
+  return datasetHeaders.map((mnemonic, order) => {
+    const row = byMnemonic.get(mnemonic);
+    if (!row) throw new Error(`ITER dictionary is missing mnemonic: ${mnemonic}`);
+    const logicalType = TEXT_MNEMONICS.has(mnemonic)
+      ? "TEXTO"
+      : DECIMAL_MNEMONICS.has(mnemonic)
+        ? "DECIMAL"
+        : "ENTERO";
+    return {
+      ...row,
+      logicalType,
+      unit: logicalType === "TEXTO" ? "TEXTO" : logicalType === "DECIMAL" ? "PROMEDIO" : "CONTEO",
+      category: null,
+      reserveRule: logicalType === "TEXTO" ? {} : { marker: "*" },
+      exposeSummary: SUMMARY_MNEMONICS.has(mnemonic),
+      order,
+    };
+  });
 }
 
 export async function readIterArchive(zipPath) {

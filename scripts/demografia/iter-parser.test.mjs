@@ -10,6 +10,7 @@ import {
   classifyIterRow,
   hashRecord,
   parseDmsCoordinate,
+  parseIterDictionary,
   parseIterValue,
   readIterArchive,
 } from "./iter-parser.mjs";
@@ -164,4 +165,32 @@ test("parseDmsCoordinate returns longitude before latitude with correct signs", 
   assert.equal(parseDmsCoordinate(`99°50'38.515" W`), -99.84403194444444);
   assert.equal(parseDmsCoordinate(`19°57'22.423" N`), 19.956228611111112);
   assert.equal(parseDmsCoordinate(""), null);
+});
+
+test("parseIterDictionary aligns trimmed mnemonics with the dataset header", () => {
+  const dictionaryText = [
+    ",,,,,,,,,",
+    "Núm.,Indicador,Descripción,Mnemónico,Rangos,Longitud,,,,",
+    "1,Clave de entidad,Identificador,ENTIDAD,00…32,2,,,,",
+    "2,Entidad,Nombre oficial,NOM_ENT ,Alfanumérico,50,,,,",
+    "1,Población total,Personas residentes,POBTOT,0…999999999,9,,,,",
+    "2,Grado promedio,Promedio escolar,GRAPROES,0…99,5,,,,",
+  ].join("\n");
+
+  const indicators = parseIterDictionary(dictionaryText, [
+    "ENTIDAD",
+    "NOM_ENT",
+    "POBTOT",
+    "GRAPROES",
+  ]);
+
+  assert.deepEqual(
+    indicators.map(({ mnemonic, logicalType, order }) => ({ mnemonic, logicalType, order })),
+    [
+      { mnemonic: "ENTIDAD", logicalType: "TEXTO", order: 0 },
+      { mnemonic: "NOM_ENT", logicalType: "TEXTO", order: 1 },
+      { mnemonic: "POBTOT", logicalType: "ENTERO", order: 2 },
+      { mnemonic: "GRAPROES", logicalType: "DECIMAL", order: 3 },
+    ]
+  );
 });

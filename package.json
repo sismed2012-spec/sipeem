@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "demografia:preflight": "node scripts/demografia/profile.mjs",
+    "demografia:import": "node scripts/import-inegi-demografia.mjs",
     "seed": "npx tsx scripts/seed.ts",
     "import:municipal-oficial": "node scripts/import-municipal-oficial.mjs"
   },
