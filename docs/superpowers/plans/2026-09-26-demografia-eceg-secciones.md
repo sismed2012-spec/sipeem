@@ -179,20 +179,37 @@ runner.
 - [x] Ejecutar correspondencias y postflight de solo lectura.
 - [x] Verificar 6,544 fuente, 6,401 vínculos históricos, 143 sin equivalencia,
   suma estatal, reservas, RLS, grants y precedencia del RPC.
-- [ ] Verificar Preview con secciones directas, fallback y no disponibles.
-- [ ] Registrar hashes, lotes, commits y URL Preview. Declarar que PROD no cambió.
+- [x] Verificar Preview con secciones directas, fallback y no disponibles.
+- [x] Registrar hashes, lotes, commits y URL Preview. Declarar que PROD no cambió.
 
 ## Final Acceptance Checklist
 
-- [ ] Fuente oficial y hashes registrados.
-- [ ] 6,544 secciones y 220 indicadores cargados idempotentemente.
-- [ ] 16,992,418 habitantes conciliados.
-- [ ] 6,401 candidatas numéricas sin duplicación, identificadas como vínculo
+- [x] Fuente oficial y hashes registrados.
+- [x] 6,544 secciones y 220 indicadores cargados idempotentemente.
+- [x] 16,992,418 habitantes conciliados.
+- [x] 6,401 candidatas numéricas sin duplicación, identificadas como vínculo
   histórico y no como equivalencia geométrica.
-- [ ] 143 secciones origen y su población conservadas sin reparto.
-- [ ] 651 secciones destino muestran fallback explícito o no disponible.
-- [ ] La respuesta identifica conjunto, grano, marco y método.
-- [ ] Importación reanudable probada sin retry automático.
-- [ ] RLS y privilegios allow/deny verificados.
-- [ ] Tests, typecheck, lint, build y Preview verificados.
-- [ ] PROD no fue modificado.
+- [x] 143 secciones origen y su población conservadas sin reparto.
+- [x] 651 secciones destino muestran fallback explícito o no disponible.
+- [x] La respuesta identifica conjunto, grano, marco y método.
+- [x] Importación reanudable probada sin retry automático.
+- [x] RLS y privilegios allow/deny verificados.
+- [x] Tests, typecheck, lint, build y Preview verificados; el lint enfocado está
+  limpio y los tres errores globales preexistentes quedan documentados en Task 5.
+- [x] PROD no fue modificado.
+
+## Rollout Record — SIPEEM-DEV
+
+- Proyecto: `nppvprbfmjbhwheghipa`; versión cartográfica: `4025`.
+- XLSX SHA-256:
+  `8f409924e3f97fe4f839a8a9a2543d5d364c5ce161b87f9a322e5da4ee2bcc37`.
+- ZIP SHA-256:
+  `576c4821fcfd40a8b8a97c1c717b07d66ad07511bd7f81733edf0b28442b707b`.
+- Migraciones exactas aplicadas: `20260927061605`, `20260927063836`.
+- Lotes: 56/56 ejecutados; 55 lotes de datos confirmados y 0 defectuosos.
+- Publicación atómica: fuente `11`, 6,544 correspondencias publicadas.
+- Commits: `3806378`, `9cc321d`, `e5680f8`, `42aa444`, `c82370b`,
+  `ae0019d`, `55723b7`, `f85ec36`.
+- Preview `READY`:
+  `https://sipeem-e9perep4f-leo-zarates-projects.vercel.app`.
+- PROD no fue migrado, desplegado ni promovido.
