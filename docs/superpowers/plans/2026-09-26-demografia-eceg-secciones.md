@@ -155,13 +155,16 @@ runner.
 - Consumes: respuesta ampliada de Task 4.
 - Produces: tarjeta demográfica con procedencia inequívoca.
 
-- [ ] Escribir pruebas de presentación para ECEG directa, fallback ITER,
+- [x] Escribir pruebas de presentación para ECEG directa, fallback ITER,
   `SIN_EQUIVALENCIA`, valores nulos y cambio rápido de sección/versión.
-- [ ] Mostrar `INEGI ECEG 2020`, `Marco INE enero 2021`, método y advertencia
+- [x] Mostrar `INEGI ECEG 2020`, `Marco INE enero 2021`, método y advertencia
   antes de los indicadores.
-- [ ] Conservar AbortController/token de solicitud para impedir datos obsoletos.
-- [ ] Ejecutar pruebas enfocadas, typecheck, lint y build.
-- [ ] Commit: `feat: show ECEG provenance in section demographics`.
+- [x] Conservar AbortController/token de solicitud para impedir datos obsoletos.
+- [x] Ejecutar pruebas enfocadas, typecheck, lint y build. El lint enfocado
+  queda verde; el lint global conserva tres errores preexistentes fuera de este
+  alcance (`analytics.ts` y dos componentes de historial). El build sí queda
+  verde.
+- [x] Commit: `feat: show ECEG provenance in section demographics`.
 
 ## Task 6: Controlled SIPEEM-DEV Rollout
 

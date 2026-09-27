@@ -27,7 +27,7 @@ const FIXTURE_SCHEMA = Object.fromEntries(
   }])
 );
 
-function dataRows(sheet, overrides = {}) {
+function dataRows(sheet) {
   const indicators = sheet === "Población"
     ? ["Población total", "Indicador repetido"]
     : [sheet === "Vivienda" ? "Indicador repetido" : `Indicador ${sheet}`];
