@@ -50,7 +50,8 @@ export function resolvePopupContext(
   props: FeatureProperties,
   analyticsByGeoId: Map<number, MapAnalyticsDTO>,
   analyticsByMunicipioId: Map<number, MapAnalyticsDTO>,
-  selectedMunicipioId: number | null = null
+  selectedMunicipioId: number | null = null,
+  selectedMunicipioName: string | null = null
 ) {
   const analytics = firstAnalyticsMatch(props, analyticsByGeoId, analyticsByMunicipioId);
   const directMunicipioId = toNumericCandidates(props.municipio_id)[0] ?? null;
@@ -62,5 +63,7 @@ export function resolvePopupContext(
       analytics?.municipio_id ??
       directMunicipioId ??
       null,
+    municipioNombre:
+      selectedMunicipioName?.trim() || analytics?.municipio_nombre || null,
   };
 }

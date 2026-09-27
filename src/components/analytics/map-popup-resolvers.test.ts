@@ -43,9 +43,24 @@ function run() {
     { municipio_id: 2 },
     byGeoId,
     byMunicipioId,
-    99
+    99,
+    "San Jose del Rincon"
   );
   assert.equal(selectedWins.municipioId, 99);
+  assert.equal(selectedWins.municipioNombre, "San Jose del Rincon");
+
+  const selectedNameFillsVersionedSection = resolvePopupContext(
+    { MUNICIPIO: 124, SECCION: 4084 },
+    byGeoId,
+    byMunicipioId,
+    77,
+    "San Jose del Rincon"
+  );
+  assert.equal(selectedNameFillsVersionedSection.municipioId, 77);
+  assert.equal(
+    selectedNameFillsVersionedSection.municipioNombre,
+    "San Jose del Rincon"
+  );
 }
 
 run();
