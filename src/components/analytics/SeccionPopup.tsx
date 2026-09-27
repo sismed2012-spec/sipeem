@@ -1,8 +1,21 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { X, Loader2 } from "lucide-react";
+import { useState, useEffect, useRef, useCallback, type CSSProperties } from "react";
+import { X, Loader2, GripHorizontal } from "lucide-react";
 import type { SeccionDetalle } from "@/actions/estructura";
+import { createDemografiaRequestCoordinator } from "@/lib/demografia-client";
+import type { DemografiaSeccionResponse } from "@/lib/demografia-types";
+import { DemografiaSeccionCard } from "./DemografiaSeccionCard";
+
+type PopupBox = {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+};
+
+const POPUP_MIN_W = 240;
+const POPUP_MIN_H = 200;
 
 export interface ArcGISSeccionProps {
   numero: string | number;
@@ -17,13 +30,172 @@ export interface ArcGISSeccionProps {
 
 interface Props {
   seccion: ArcGISSeccionProps;
+  cartografiaVersionId: number;
   onClose: () => void;
 }
 
-export function SeccionPopup({ seccion, onClose }: Props) {
+export function SeccionPopup({ seccion, cartografiaVersionId, onClose }: Props) {
+  const rootRef = useRef<HTMLDivElement>(null);
   const [detalle, setDetalle] = useState<SeccionDetalle | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
+  const [customBox, setCustomBox] = useState<PopupBox | null>(null);
+  const [demografia, setDemografia] = useState<DemografiaSeccionResponse | null>(null);
+  const [demografiaLoading, setDemografiaLoading] = useState(false);
+  const [demografiaError, setDemografiaError] = useState(false);
+  const demografiaCoordinatorRef = useRef<ReturnType<
+    typeof createDemografiaRequestCoordinator
+  > | null>(null);
+
+  if (demografiaCoordinatorRef.current === null) {
+    demografiaCoordinatorRef.current = createDemografiaRequestCoordinator(
+      async (_key, signal, input) => {
+        const query = new URLSearchParams({
+          versionId: String(input.versionId),
+          censusYear: String(input.censusYear),
+        });
+        const response = await fetch(
+          `/api/demografia/secciones/${input.sectionId}?${query.toString()}`,
+          { signal, cache: "no-store" }
+        );
+        if (!response.ok) throw new Error("Demografía no disponible");
+        return response.json() as Promise<DemografiaSeccionResponse>;
+      },
+      (value) => {
+        setDemografia(value);
+        if (value) setDemografiaLoading(false);
+      },
+      () => {
+        setDemografiaError(true);
+        setDemografiaLoading(false);
+      }
+    );
+  }
+
+  const syncBoxFromDom = useCallback((): PopupBox | null => {
+    const el = rootRef.current;
+    const parent = el?.offsetParent as HTMLElement | null;
+    if (!el || !parent) return null;
+    const pr = parent.getBoundingClientRect();
+    const er = el.getBoundingClientRect();
+    return {
+      left: er.left - pr.left,
+      top: er.top - pr.top,
+      width: Math.max(POPUP_MIN_W, er.width),
+      height: Math.max(POPUP_MIN_H, er.height),
+    };
+  }, []);
+
+  const startDragHeader = useCallback(
+    (e: React.PointerEvent) => {
+      if (e.button !== 0) return;
+      const parent = rootRef.current?.offsetParent as HTMLElement | null;
+      if (!parent) return;
+      const base = customBox ?? syncBoxFromDom();
+      if (!base) return;
+      setCustomBox(base);
+      e.preventDefault();
+      e.currentTarget.setPointerCapture(e.pointerId);
+
+      const startX = e.clientX;
+      const startY = e.clientY;
+      const orig = { ...base };
+
+      const clampBox = (next: PopupBox): PopupBox => {
+        const pw = parent.clientWidth;
+        const ph = parent.clientHeight;
+        const maxL = Math.max(0, pw - next.width);
+        const maxT = Math.max(0, ph - next.height);
+        return {
+          ...next,
+          left: Math.min(maxL, Math.max(0, next.left)),
+          top: Math.min(maxT, Math.max(0, next.top)),
+        };
+      };
+
+      const onMove = (ev: PointerEvent) => {
+        const dx = ev.clientX - startX;
+        const dy = ev.clientY - startY;
+        setCustomBox(
+          clampBox({
+            ...orig,
+            left: orig.left + dx,
+            top: orig.top + dy,
+          })
+        );
+      };
+
+      const pid = e.pointerId;
+      const onUp = () => {
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+        try {
+          e.currentTarget.releasePointerCapture(pid);
+        } catch {
+          /* ignore */
+        }
+      };
+
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+    },
+    [customBox, syncBoxFromDom]
+  );
+
+  const startResize = useCallback(
+    (e: React.PointerEvent) => {
+      if (e.button !== 0) return;
+      e.stopPropagation();
+      const parent = rootRef.current?.offsetParent as HTMLElement | null;
+      if (!parent) return;
+      const base = customBox ?? syncBoxFromDom();
+      if (!base) return;
+      setCustomBox(base);
+      e.preventDefault();
+      e.currentTarget.setPointerCapture(e.pointerId);
+
+      const startX = e.clientX;
+      const startY = e.clientY;
+      const orig = { ...base };
+
+      const onMove = (ev: PointerEvent) => {
+        const dw = ev.clientX - startX;
+        const dh = ev.clientY - startY;
+        const width = Math.max(POPUP_MIN_W, orig.width + dw);
+        const height = Math.max(POPUP_MIN_H, orig.height + dh);
+        const pw = parent.clientWidth;
+        const ph = parent.clientHeight;
+        let left = orig.left;
+        let top = orig.top;
+        if (left + width > pw) left = Math.max(0, pw - width);
+        if (top + height > ph) top = Math.max(0, ph - height);
+        setCustomBox({ left, top, width, height });
+      };
+
+      const pid = e.pointerId;
+      const onUp = () => {
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+        try {
+          e.currentTarget.releasePointerCapture(pid);
+        } catch {
+          /* ignore */
+        }
+      };
+
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+    },
+    [customBox, syncBoxFromDom]
+  );
+
+  const resetLayout = useCallback(() => {
+    setCustomBox(null);
+  }, []);
+
+  useEffect(() => {
+    setCustomBox(null);
+  }, [seccion.numero, seccion.municipioId]);
 
   useEffect(() => {
     if (!seccion.municipioId) return;
@@ -38,6 +210,21 @@ export function SeccionPopup({ seccion, onClose }: Props) {
       .finally(() => setLoading(false));
   }, [seccion.municipioId, seccion.numero]);
 
+  useEffect(() => {
+    const sectionId = Number(seccion.numero);
+    const coordinator = demografiaCoordinatorRef.current;
+    if (!coordinator || !Number.isSafeInteger(sectionId) || sectionId < 1) {
+      coordinator?.clear();
+      setDemografiaLoading(false);
+      return;
+    }
+
+    setDemografiaError(false);
+    setDemografiaLoading(true);
+    void coordinator.select({ sectionId, versionId: cartografiaVersionId, censusYear: 2020 });
+    return () => coordinator.clear();
+  }, [cartografiaVersionId, seccion.numero]);
+
   const daysSince =
     detalle?.ultimo_evento
       ? Math.floor(
@@ -48,27 +235,62 @@ export function SeccionPopup({ seccion, onClose }: Props) {
   const effectiveTipo = detalle?.tipo ?? seccion.tipo ?? "-";
   const effectiveListaNominal = detalle?.lista_nominal ?? null;
 
+  const layoutClass = customBox
+    ? "relative z-30 flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl pointer-events-auto 2xl:rounded-xl"
+    : "absolute inset-x-3 bottom-[14.5rem] z-30 flex w-auto flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl pointer-events-auto 2xl:top-4 2xl:left-[calc(50%+10rem)] 2xl:bottom-auto 2xl:w-64 2xl:rounded-xl";
+
+  const layoutStyle: CSSProperties | undefined = customBox
+    ? {
+        position: "absolute",
+        left: customBox.left,
+        top: customBox.top,
+        width: customBox.width,
+        height: customBox.height,
+      }
+    : undefined;
+
   return (
-    <div className="absolute inset-x-3 bottom-[14.5rem] z-30 w-auto overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl pointer-events-auto 2xl:top-4 2xl:left-[calc(50%+10rem)] 2xl:bottom-auto 2xl:w-64 2xl:rounded-xl">
-      <div className="flex items-start justify-between bg-slate-950 px-4 py-2.5">
-        <div>
-          <div className="text-[12px] font-bold text-white">
-            Seccion {seccion.numero}
-          </div>
-          <div className="mt-0.5 text-[9px] text-slate-400">
-            {seccion.municipio ?? "Municipio sin resolver"}
-            {seccion.dto_local != null ? ` · Dto. Local ${seccion.dto_local}` : ""}
+    <div ref={rootRef} className={layoutClass} style={layoutStyle}>
+      <div
+        role="group"
+        aria-label="Panel de sección: arrastrar para mover"
+        title="Arrastrar para mover · esquina inferior derecha para tamaño · doble clic restablece posición"
+        onPointerDown={startDragHeader}
+        onDoubleClick={resetLayout}
+        className="flex shrink-0 cursor-grab touch-none select-none items-start justify-between bg-slate-950 px-4 py-2.5 active:cursor-grabbing"
+      >
+        <div className="flex min-w-0 flex-1 items-start gap-2">
+          <GripHorizontal
+            className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-500"
+            aria-hidden
+          />
+          <div className="min-w-0">
+            <div className="text-[12px] font-bold text-white">
+              Sección {seccion.numero}
+            </div>
+            <div className="mt-0.5 text-[9px] text-slate-400">
+              {seccion.municipio ?? "Municipio sin resolver"}
+              {seccion.dto_local != null ? ` · Dto. Local ${seccion.dto_local}` : ""}
+            </div>
           </div>
         </div>
         <button
+          type="button"
           onClick={onClose}
+          onPointerDown={(ev) => ev.stopPropagation()}
           className="ml-2 mt-0.5 shrink-0 text-slate-400 transition-colors hover:text-white"
         >
           <X className="h-3.5 w-3.5" />
         </button>
       </div>
 
-      <div className="space-y-3 p-3">
+      <div
+        className={
+          customBox
+            ? "min-h-0 flex-1 space-y-3 overflow-y-auto p-3"
+            : "space-y-3 p-3"
+        }
+      >
         <div>
           <div className="mb-1.5 text-[9px] font-bold uppercase tracking-widest text-slate-400">
             Cartografia base
@@ -138,7 +360,30 @@ export function SeccionPopup({ seccion, onClose }: Props) {
             </>
           )}
         </div>
+
+        <div>
+          {demografiaLoading && (
+            <div className="flex items-center justify-center py-3" aria-label="Cargando demografía">
+              <Loader2 className="h-4 w-4 animate-spin text-sky-600" />
+            </div>
+          )}
+          {!demografiaLoading && demografiaError && (
+            <p className="py-2 text-center text-[10px] text-slate-400">
+              No se pudo consultar la demografía
+            </p>
+          )}
+          {!demografiaLoading && !demografiaError && demografia && (
+            <DemografiaSeccionCard data={demografia} />
+          )}
+        </div>
       </div>
+
+      <button
+        type="button"
+        aria-label="Redimensionar panel"
+        onPointerDown={startResize}
+        className="absolute bottom-0 right-0 z-10 h-5 w-5 cursor-se-resize touch-none bg-gradient-to-tl from-slate-200/90 to-transparent hover:from-slate-300/90"
+      />
     </div>
   );
 }

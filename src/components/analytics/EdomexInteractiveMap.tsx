@@ -15,6 +15,7 @@ import { MapTooltip } from "./MapTooltip";
 import { MunicipioPopup, type ArcGISMunicipioProps } from "./MunicipioPopup";
 import { SeccionPopup, type ArcGISSeccionProps } from "./SeccionPopup";
 import { resolvePopupContext } from "./map-popup-resolvers";
+import { isSectionSelectionCurrent } from "@/lib/cartografia-map";
 
 type FeatureProperties = Record<string, string | number | null | undefined>;
 type MapFeature = GeoJSON.Feature<GeoJSON.Geometry, GeoJSON.GeoJsonProperties>;
@@ -37,6 +38,7 @@ interface Props {
   ) => void;
   onVerSecciones?: () => void;
   coberturaMap?: Record<number, { compromisos: number; meta: number }>;
+  cartografiaVersionId?: number | null;
 }
 
 interface HoveredMunicipio {
@@ -86,11 +88,13 @@ function arcgisPropsToMunicipio(p: FeatureProperties): ArcGISMunicipioProps {
 
 function arcgisPropsToSeccion(
   p: FeatureProperties,
-  municipioId: number | null
+  municipioId: number | null,
+  municipioNombre: string | null
 ): ArcGISSeccionProps {
   return {
     numero: p.SECCION ?? p.CVE_SECC ?? p.seccion ?? "?",
-    municipio: firstString(p.NOMMUN, p.NOMGEO, p.NOMBRE, p.municipio) ?? null,
+    municipio:
+      firstString(p.NOMMUN, p.NOMGEO, p.NOMBRE) ?? municipioNombre ?? null,
     municipioClave: firstString(p.MUNICIPIO, p.CVE_MUN, p.municipio) ?? null,
     dto_federal: p.DISTRITO_F ?? p.CVE_DTO_FED ?? p.DTO_FED ?? null,
     dto_local: p.DISTRITO_L ?? p.CVE_DTO_LOC ?? p.DTO_LOC ?? null,
@@ -137,6 +141,7 @@ export function EdomexInteractiveMap({
   onMunicipioSelect,
   onVerSecciones,
   coberturaMap = {},
+  cartografiaVersionId = null,
 }: Props) {
   const [hoveredMun, setHoveredMun] = useState<HoveredMunicipio | null>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
@@ -147,7 +152,10 @@ export function EdomexInteractiveMap({
     geoValue: string | number | null;
   } | null>(null);
   const [selectedSeccion, setSelectedSeccion] =
-    useState<ArcGISSeccionProps | null>(null);
+    useState<{
+      data: ArcGISSeccionProps;
+      versionId: number | null;
+    } | null>(null);
   const [mapTransform, setMapTransform] = useState(DEFAULT_VIEW);
 
   const svgRef = useRef<SVGSVGElement>(null);
@@ -437,7 +445,7 @@ export function EdomexInteractiveMap({
 
                       return (
                         <path
-                          key={`sec-${i}`}
+                          key={`sec-${cartografiaVersionId ?? "none"}-${feature.id ?? i}`}
                           d={featureToPath(feature)}
                           fill={`${sectionColor}55`}
                           stroke={sectionColor}
@@ -451,14 +459,17 @@ export function EdomexInteractiveMap({
                               p,
                               analyticsByGeoId,
                               analyticsByMunicipioId,
-                              selectedMunicipio?.municipioId ?? null
+                              selectedMunicipio?.municipioId ?? null,
+                              selectedMunicipio?.arcgis.nombre ?? null
                             );
-                            setSelectedSeccion(
-                              arcgisPropsToSeccion(
+                            setSelectedSeccion({
+                              data: arcgisPropsToSeccion(
                                 p,
-                                popupContext.municipioId
-                              )
-                            );
+                                popupContext.municipioId,
+                                popupContext.municipioNombre
+                              ),
+                              versionId: cartografiaVersionId,
+                            });
                           }}
                         />
                       );
@@ -599,9 +610,14 @@ export function EdomexInteractiveMap({
         />
       )}
 
-      {selectedSeccion && (
+      {selectedSeccion &&
+        isSectionSelectionCurrent(
+          selectedSeccion.versionId,
+          cartografiaVersionId
+        ) && (
         <SeccionPopup
-          seccion={selectedSeccion}
+          seccion={selectedSeccion.data}
+          cartografiaVersionId={selectedSeccion.versionId!}
           onClose={() => setSelectedSeccion(null)}
         />
       )}
