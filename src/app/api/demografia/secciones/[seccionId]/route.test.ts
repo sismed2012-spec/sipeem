@@ -12,7 +12,33 @@ it("dynamic section route awaits params and accepts only the controlled query", 
       p_cartografia_version_id: 4025,
       p_anio_censal: 2020,
     });
-    return { data: [], error: null };
+    return {
+      data: [{
+        section_id: 2221,
+        version_id: 4025,
+        source: {
+          provider: "INEGI",
+          datasetKey: "CPV2020_ECEG",
+          censusYear: 2020,
+          sourceGrain: "SECCION",
+          sourceFrameDate: "2021-01-31",
+          mappingMethod: "CLAVE_NUMERICA",
+          mappingStatus: "VINCULO_HISTORICO",
+          warnings: ["Marco INE enero 2021"],
+        },
+        status: "COMPLETE",
+        coverage: {
+          includedLocalities: null,
+          pendingLocalities: null,
+          includedPopulation: 2994,
+          pendingPopulationReference: null,
+          percentage: null,
+          isAdditive: false,
+        },
+        indicators: { pobtot: 2994 },
+      }],
+      error: null,
+    };
   };
   const GET = createDemografiaSectionRoute({
     authenticate: async () => ({ id: "user-1" }),
@@ -25,7 +51,10 @@ it("dynamic section route awaits params and accepts only the controlled query", 
 
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("cache-control"), "private, no-store");
-  assert.equal((await response.json()).status, "UNAVAILABLE");
+  const body = await response.json();
+  assert.equal(body.status, "COMPLETE");
+  assert.equal(body.source.sourceGrain, "SECCION");
+  assert.equal(body.source.sourceFrameDate, "2021-01-31");
 });
 
 it("dynamic section route returns 400 when versionId is missing", async () => {

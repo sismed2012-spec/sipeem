@@ -12,7 +12,16 @@ function response(
   return {
     sectionId: 2221,
     versionId: 4025,
-    source: { provider: "INEGI", datasetKey: "CPV2020_ITER", censusYear: 2020 },
+    source: {
+      provider: "INEGI",
+      datasetKey: "CPV2020_ITER",
+      censusYear: 2020,
+      sourceGrain: "LOCALIDAD",
+      sourceFrameDate: null,
+      mappingMethod: "SOLO_DIRECTAS",
+      mappingStatus: "COMPLETE",
+      warnings: [],
+    },
     status: "COMPLETE",
     coverage: {
       includedLocalities: 4,

@@ -138,16 +138,16 @@ runner.
 - Produces: respuesta unificada con `sourceGrain`, `sourceFrameDate`,
   `mappingMethod` y advertencias.
 
-- [ ] Crear migración con `npm.cmd exec supabase -- migration new
+- [x] Crear migración con `npm.cmd exec supabase -- migration new
   extend_demografia_eceg_read_api`.
-- [ ] Escribir pruebas SQL/TypeScript fallidas para precedencia ECEG, fallback
+- [x] Escribir pruebas SQL/TypeScript fallidas para precedencia ECEG, fallback
   ITER, ausencia total y prohibición de mezclar fuentes.
-- [ ] Implementar RPC `SECURITY INVOKER`, `search_path` controlado y ejecución
+- [x] Implementar RPC `SECURITY INVOKER`, `search_path` controlado y ejecución
   exclusiva para `service_role`.
-- [ ] Cambiar conteos de localidad del contrato a anulables cuando el grano es
+- [x] Cambiar conteos de localidad del contrato a anulables cuando el grano es
   `SECCION`.
-- [ ] Ejecutar pruebas de RPC, ruta, tipos y `tsc --noEmit` hasta PASS.
-- [ ] Commit: `feat: serve versioned ECEG section demographics`.
+- [x] Ejecutar pruebas de RPC, ruta, tipos y `tsc --noEmit` hasta PASS.
+- [x] Commit: `feat: serve versioned ECEG section demographics`.
 
 ## Task 5: Show Source Frame and Mapping Quality in the UI
 

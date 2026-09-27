@@ -54,7 +54,16 @@ describe("getVersionedSectionDemographics", () => {
         data: [{
           section_id: 2221,
           version_id: 4025,
-          source: { provider: "INEGI", datasetKey: "CPV2020_ITER", censusYear: 2020 },
+          source: {
+            provider: "INEGI",
+            datasetKey: "CPV2020_ITER",
+            censusYear: 2020,
+            sourceGrain: "LOCALIDAD",
+            sourceFrameDate: null,
+            mappingMethod: "SOLO_DIRECTAS",
+            mappingStatus: "PARTIAL",
+            warnings: [],
+          },
           status: "PARTIAL",
           coverage: {
             includedLocalities: 3,
@@ -79,7 +88,16 @@ describe("getVersionedSectionDemographics", () => {
       {
         sectionId: 2221,
         versionId: 4025,
-        source: { provider: "INEGI", datasetKey: "CPV2020_ITER", censusYear: 2020 },
+        source: {
+          provider: "INEGI",
+          datasetKey: "CPV2020_ITER",
+          censusYear: 2020,
+          sourceGrain: "LOCALIDAD",
+          sourceFrameDate: null,
+          mappingMethod: "SOLO_DIRECTAS",
+          mappingStatus: "PARTIAL",
+          warnings: [],
+        },
         status: "PARTIAL",
         coverage: {
           includedLocalities: 3,
@@ -94,6 +112,87 @@ describe("getVersionedSectionDemographics", () => {
     );
   });
 
+  it("normalizes ECEG section-grain provenance with nullable locality counts", async () => {
+    const invoke: DemografiaRpcInvoker = async () => ({
+      data: [{
+        section_id: 2221,
+        version_id: 4025,
+        source: {
+          provider: "INEGI",
+          datasetKey: "CPV2020_ECEG",
+          censusYear: 2020,
+          sourceGrain: "SECCION",
+          sourceFrameDate: "2021-01-31",
+          mappingMethod: "CLAVE_NUMERICA",
+          mappingStatus: "VINCULO_HISTORICO",
+          warnings: ["Marco INE enero 2021"],
+        },
+        status: "COMPLETE",
+        coverage: {
+          includedLocalities: null,
+          pendingLocalities: null,
+          includedPopulation: 2994,
+          pendingPopulationReference: null,
+          percentage: null,
+          isAdditive: false,
+        },
+        indicators: { pobtot: 2994, POBLACION_POBLACION_TOTAL: 2994 },
+      }],
+      error: null,
+    });
+
+    const result = await getVersionedSectionDemographics(invoke, {
+      sectionId: 2221,
+      versionId: 4025,
+      censusYear: 2020,
+    });
+
+    assert.equal(result.source.sourceGrain, "SECCION");
+    assert.equal(result.source.sourceFrameDate, "2021-01-31");
+    assert.equal(result.coverage.includedLocalities, null);
+    assert.deepEqual(result.source.warnings, ["Marco INE enero 2021"]);
+    assert.equal(result.indicators.pobtot, 2994);
+  });
+
+  it("rejects a response that mixes section-grain ECEG with locality coverage", async () => {
+    const invoke: DemografiaRpcInvoker = async () => ({
+      data: [{
+        section_id: 2221,
+        version_id: 4025,
+        source: {
+          provider: "INEGI",
+          datasetKey: "CPV2020_ECEG",
+          censusYear: 2020,
+          sourceGrain: "SECCION",
+          sourceFrameDate: "2021-01-31",
+          mappingMethod: "CLAVE_NUMERICA",
+          mappingStatus: "VINCULO_HISTORICO",
+          warnings: [],
+        },
+        status: "COMPLETE",
+        coverage: {
+          includedLocalities: 1,
+          pendingLocalities: 0,
+          includedPopulation: 2994,
+          pendingPopulationReference: null,
+          percentage: null,
+          isAdditive: false,
+        },
+        indicators: { pobtot: 2994 },
+      }],
+      error: null,
+    });
+
+    await assert.rejects(
+      () => getVersionedSectionDemographics(invoke, {
+        sectionId: 2221,
+        versionId: 4025,
+        censusYear: 2020,
+      }),
+      DemografiaGatewayError
+    );
+  });
+
   it("returns a stable UNAVAILABLE response when the RPC has no row", async () => {
     const invoke: DemografiaRpcInvoker = async () => ({ data: [], error: null });
     const result = await getVersionedSectionDemographics(invoke, {
@@ -104,8 +203,8 @@ describe("getVersionedSectionDemographics", () => {
 
     assert.equal(result.status, "UNAVAILABLE");
     assert.deepEqual(result.coverage, {
-      includedLocalities: 0,
-      pendingLocalities: 0,
+      includedLocalities: null,
+      pendingLocalities: null,
       includedPopulation: null,
       pendingPopulationReference: null,
       percentage: null,
