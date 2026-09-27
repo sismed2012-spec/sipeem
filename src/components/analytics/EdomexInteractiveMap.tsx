@@ -16,6 +16,7 @@ import { MunicipioPopup, type ArcGISMunicipioProps } from "./MunicipioPopup";
 import { SeccionPopup, type ArcGISSeccionProps } from "./SeccionPopup";
 import { resolvePopupContext } from "./map-popup-resolvers";
 import { isSectionSelectionCurrent } from "@/lib/cartografia-map";
+import { resolveDemografiaSectionId } from "@/lib/demografia-map";
 
 type FeatureProperties = Record<string, string | number | null | undefined>;
 type MapFeature = GeoJSON.Feature<GeoJSON.Geometry, GeoJSON.GeoJsonProperties>;
@@ -92,6 +93,7 @@ function arcgisPropsToSeccion(
   municipioNombre: string | null
 ): ArcGISSeccionProps {
   return {
+    seccionId: resolveDemografiaSectionId(p),
     numero: p.SECCION ?? p.CVE_SECC ?? p.seccion ?? "?",
     municipio:
       firstString(p.NOMMUN, p.NOMGEO, p.NOMBRE) ?? municipioNombre ?? null,

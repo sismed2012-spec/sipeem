@@ -18,6 +18,7 @@ const POPUP_MIN_W = 240;
 const POPUP_MIN_H = 200;
 
 export interface ArcGISSeccionProps {
+  seccionId: number | null;
   numero: string | number;
   municipio: string | null;
   municipioClave: string | number | null;
@@ -211,10 +212,12 @@ export function SeccionPopup({ seccion, cartografiaVersionId, onClose }: Props) 
   }, [seccion.municipioId, seccion.numero]);
 
   useEffect(() => {
-    const sectionId = Number(seccion.numero);
+    const sectionId = seccion.seccionId;
     const coordinator = demografiaCoordinatorRef.current;
-    if (!coordinator || !Number.isSafeInteger(sectionId) || sectionId < 1) {
+    if (!coordinator || sectionId === null) {
       coordinator?.clear();
+      setDemografia(null);
+      setDemografiaError(false);
       setDemografiaLoading(false);
       return;
     }
@@ -223,7 +226,7 @@ export function SeccionPopup({ seccion, cartografiaVersionId, onClose }: Props) 
     setDemografiaLoading(true);
     void coordinator.select({ sectionId, versionId: cartografiaVersionId, censusYear: 2020 });
     return () => coordinator.clear();
-  }, [cartografiaVersionId, seccion.numero]);
+  }, [cartografiaVersionId, seccion.seccionId]);
 
   const daysSince =
     detalle?.ultimo_evento
