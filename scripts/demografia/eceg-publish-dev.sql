@@ -20,7 +20,8 @@ begin
     and clave_entidad = '15'
     and archivo_sha256 = '8f409924e3f97fe4f839a8a9a2543d5d364c5ce161b87f9a322e5da4ee2bcc37'
     and filas_total = 6544
-    and columnas_total = 220;
+    and columnas_total = 220
+  for update;
 
   if v_source_state <> 'PREPARADA' then
     raise exception 'ECEG source must be PREPARADA, got %', v_source_state;

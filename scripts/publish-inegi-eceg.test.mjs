@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import {
@@ -38,6 +39,18 @@ test("buildEcegPublishSql binds the database guard in one transaction", () => {
   );
   assert.match(sql, /do \$x\$/i);
   assert.match(sql, /commit;\s*$/i);
+});
+
+test("the publication gate locks the source against concurrent batches", async () => {
+  const sql = await readFile(
+    new URL("./demografia/eceg-publish-dev.sql", import.meta.url),
+    "utf8"
+  );
+
+  assert.match(
+    sql,
+    /select demografia_fuente_id, estado[\s\S]*for update;/i
+  );
 });
 
 test("runEcegPublish is dry-run by default and executes exactly once on apply", async () => {

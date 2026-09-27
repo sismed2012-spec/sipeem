@@ -71,6 +71,7 @@ runner.
 | `supabase/migrations/<timestamp>_create_demografia_eceg_model.sql` | Create | Filas ECEG y correspondencias versionadas |
 | `supabase/migrations/<timestamp>_extend_demografia_eceg_read_api.sql` | Create | Lectura ECEG-first con fallback ITER |
 | `supabase/migrations/<timestamp>_harden_demografia_eceg_publication.sql` | Create | Marco exacto e inmutabilidad después de publicar |
+| `supabase/migrations/<timestamp>_close_demografia_eceg_concurrency_gaps.sql` | Create | Bloqueo compartido y protección contra reasignación |
 | `supabase/tests/demografia_eceg.sql` | Create | Integridad, seguridad y precedencia de fuente |
 | `src/lib/demografia-types.ts` | Modify | Metadatos de grano, marco y correspondencia |
 | `src/lib/demografia-versionada.ts` | Modify | Normalización del RPC ampliado |
@@ -209,7 +210,7 @@ runner.
 - ZIP SHA-256:
   `576c4821fcfd40a8b8a97c1c717b07d66ad07511bd7f81733edf0b28442b707b`.
 - Migraciones exactas aplicadas: `20260927061605`, `20260927063836`,
-  `20260927073000`.
+  `20260927073000`, `20260927075500`.
 - Lotes: 56/56 ejecutados; 55 lotes de datos confirmados y 0 defectuosos.
 - Publicación atómica: fuente `11`, 6,544 correspondencias publicadas.
 - Commits: `3806378`, `9cc321d`, `e5680f8`, `42aa444`, `c82370b`,
@@ -227,4 +228,7 @@ runner.
   checkpoint auxiliar y nunca decide omitir trabajo.
 - Una fuente ECEG `VALIDADA` o `PUBLICADA` y todos sus hijos quedan inmutables
   mediante triggers de base de datos.
+- La publicación toma `FOR UPDATE` sobre la misma fuente que bloquean los lotes;
+  los triggers validan tanto el propietario anterior como el nuevo para impedir
+  reasignaciones desde o hacia una fuente inmutable.
 - El marco `2021-01-31` se exige en fuente, filas, publicación y gateway.

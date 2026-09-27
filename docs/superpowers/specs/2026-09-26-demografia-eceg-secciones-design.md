@@ -152,7 +152,9 @@ actual para ITER.
 
 Una fuente ECEG validada o publicada es inmutable junto con sus indicadores,
 filas y correspondencias. Una nueva normalización requiere una fuente nueva,
-no la reescritura por lotes de la fuente visible.
+no la reescritura por lotes de la fuente visible. Importación y publicación
+serializan sobre el mismo bloqueo de la fuente, y una actualización valida
+tanto el propietario anterior como el nuevo para impedir reasignaciones.
 
 ## 6. Pipeline
 

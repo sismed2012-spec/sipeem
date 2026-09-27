@@ -100,11 +100,13 @@ $contract$;
 do $behavior$
 declare
   v_source_id bigint;
+  v_other_source_id bigint;
   v_eceg_id bigint;
   v_other_eceg_id bigint;
   v_cartografia_version_id bigint;
   v_cartografia_seccion_id bigint;
   v_seccion_id bigint;
+  v_indicator_id bigint;
 begin
   select s.cartografia_version_id, s.cartografia_seccion_id, s.seccion_id
   into v_cartografia_version_id, v_cartografia_seccion_id, v_seccion_id
@@ -124,6 +126,20 @@ begin
     pg_catalog.repeat('1', 64), 2, 220,
     '{"sourceFrameDate":"2021-01-31"}'::jsonb
   ) returning demografia_fuente_id into v_source_id;
+
+  insert into public.demografia_fuentes (
+    proveedor, conjunto, anio_censal, clave_entidad, archivo_nombre,
+    archivo_sha256, filas_total, columnas_total, metadatos
+  ) values (
+    'INEGI', 'CPV2020_ITER', 2198, '15', 'other-fixture.csv',
+    pg_catalog.repeat('7', 64), 1, 1, '{}'::jsonb
+  ) returning demografia_fuente_id into v_other_source_id;
+
+  insert into public.demografia_indicadores (
+    demografia_fuente_id, mnemonico, nombre, tipo_logico, orden
+  ) values (
+    v_source_id, 'FIXTURE_TOTAL', 'Fixture total', 'ENTERO', 0
+  ) returning demografia_indicador_id into v_indicator_id;
 
   insert into public.demografia_eceg_secciones (
     demografia_fuente_id, clave_entidad, nombre_entidad,
@@ -283,6 +299,15 @@ begin
       v_source_id, 'POST_PUBLICACION', 'No permitido', 'ENTERO', 219
     );
     raise exception 'published ECEG indicator was mutable';
+  exception
+    when sqlstate '55000' then null;
+  end;
+
+  begin
+    update public.demografia_indicadores
+    set demografia_fuente_id = v_other_source_id
+    where demografia_indicador_id = v_indicator_id;
+    raise exception 'published ECEG indicator was reparented';
   exception
     when sqlstate '55000' then null;
   end;
