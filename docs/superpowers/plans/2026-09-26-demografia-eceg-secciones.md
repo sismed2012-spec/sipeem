@@ -67,8 +67,10 @@ runner.
 | `scripts/demografia/eceg-sql-batches.test.mjs` | Create | Idempotencia, rangos, checksums y reanudación |
 | `scripts/import-inegi-eceg.mjs` | Create | CLI dry-run/apply limitado a DEV |
 | `scripts/import-inegi-eceg.test.mjs` | Create | Contrato de CLI y no-reintento |
+| `scripts/publish-inegi-eceg.mjs` | Create | Publicación atómica con doble guard DEV |
 | `supabase/migrations/<timestamp>_create_demografia_eceg_model.sql` | Create | Filas ECEG y correspondencias versionadas |
 | `supabase/migrations/<timestamp>_extend_demografia_eceg_read_api.sql` | Create | Lectura ECEG-first con fallback ITER |
+| `supabase/migrations/<timestamp>_harden_demografia_eceg_publication.sql` | Create | Marco exacto e inmutabilidad después de publicar |
 | `supabase/tests/demografia_eceg.sql` | Create | Integridad, seguridad y precedencia de fuente |
 | `src/lib/demografia-types.ts` | Modify | Metadatos de grano, marco y correspondencia |
 | `src/lib/demografia-versionada.ts` | Modify | Normalización del RPC ampliado |
@@ -174,7 +176,8 @@ runner.
 
 - [x] Ejecutar gate local completo y `git diff --check`.
 - [x] Repetir el preflight de solo lectura y verificar proyecto/version `4025`.
-- [x] Aplicar únicamente las dos migraciones revisadas a DEV.
+- [x] Aplicar las dos migraciones funcionales revisadas y la migración posterior
+  de endurecimiento de invariantes únicamente a DEV.
 - [x] Ejecutar una sola importación; detenerse al primer lote fallido sin retry.
 - [x] Ejecutar correspondencias y postflight de solo lectura.
 - [x] Verificar 6,544 fuente, 6,401 vínculos históricos, 143 sin equivalencia,
@@ -205,7 +208,8 @@ runner.
   `8f409924e3f97fe4f839a8a9a2543d5d364c5ce161b87f9a322e5da4ee2bcc37`.
 - ZIP SHA-256:
   `576c4821fcfd40a8b8a97c1c717b07d66ad07511bd7f81733edf0b28442b707b`.
-- Migraciones exactas aplicadas: `20260927061605`, `20260927063836`.
+- Migraciones exactas aplicadas: `20260927061605`, `20260927063836`,
+  `20260927073000`.
 - Lotes: 56/56 ejecutados; 55 lotes de datos confirmados y 0 defectuosos.
 - Publicación atómica: fuente `11`, 6,544 correspondencias publicadas.
 - Commits: `3806378`, `9cc321d`, `e5680f8`, `42aa444`, `c82370b`,
@@ -213,3 +217,14 @@ runner.
 - Preview `READY`:
   `https://sipeem-e9perep4f-leo-zarates-projects.vercel.app`.
 - PROD no fue migrado, desplegado ni promovido.
+
+## Pre-PR Hardening
+
+- El publicador sólo funciona mediante `demografia:eceg:publish`, exige el ref
+  exacto de SIPEEM-DEV y establece una marca transaccional que el propio SQL
+  vuelve a validar. La ejecución directa del archivo SQL falla cerrada.
+- Los lotes se envían siempre al ledger remoto; `run-state.json` es sólo un
+  checkpoint auxiliar y nunca decide omitir trabajo.
+- Una fuente ECEG `VALIDADA` o `PUBLICADA` y todos sus hijos quedan inmutables
+  mediante triggers de base de datos.
+- El marco `2021-01-31` se exige en fuente, filas, publicación y gateway.

@@ -17,6 +17,14 @@ export function buildSupabaseDbQueryArgs(filePath, projectRef) {
   ];
 }
 
+export function buildSupabaseDbQuerySqlArgs(sql, projectRef) {
+  assertDevProjectRef(projectRef);
+  return [
+    "exec", "supabase", "--", "db", "query", "--linked",
+    "--project-ref", projectRef, sql,
+  ];
+}
+
 export function buildNpmExecInvocation(args, {
   platform = process.platform,
   execPath = process.execPath,
@@ -65,10 +73,6 @@ export async function executeManifest(manifest, {
   const skipped = [];
   const completed = [];
   for (const batch of manifest.batches) {
-    if (confirmedChecksums.has(batch.checksum)) {
-      skipped.push(batch.id);
-      continue;
-    }
     const npmArgs = buildSupabaseDbQueryArgs(batch.filePath, projectRef);
     const invocation = buildNpmExecInvocation(npmArgs);
     const result = await runCommand(invocation.command, invocation.args);

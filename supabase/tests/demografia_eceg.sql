@@ -71,6 +71,29 @@ begin
   ) then
     raise exception 'missing partial unique destination index';
   end if;
+
+  if not exists (
+    select 1
+    from pg_catalog.pg_constraint
+    where conname = 'demografia_eceg_secciones_marco_ck'
+      and conrelid = 'public.demografia_eceg_secciones'::pg_catalog.regclass
+      and pg_catalog.pg_get_constraintdef(oid) ilike '%2021-01-31%'
+  ) then
+    raise exception 'ECEG January 2021 frame constraint is missing';
+  end if;
+
+  foreach v_table in array array[
+    'demografia_eceg_secciones_mutable_trg',
+    'demografia_eceg_correspondencias_mutable_trg',
+    'demografia_eceg_indicadores_mutable_trg',
+    'demografia_eceg_fuente_immutable_trg'
+  ] loop
+    if not exists (
+      select 1 from pg_catalog.pg_trigger where tgname = v_table and not tgisinternal
+    ) then
+      raise exception 'missing ECEG immutability trigger %', v_table;
+    end if;
+  end loop;
 end
 $contract$;
 
@@ -114,6 +137,22 @@ begin
     '{"POBLACION_POBLACION_TOTAL":10}'::jsonb,
     '{"POBLACION_POBLACION_TOTAL":"PRESENTE"}'::jsonb
   ) returning demografia_eceg_seccion_id into v_eceg_id;
+
+  begin
+    insert into public.demografia_eceg_secciones (
+      demografia_fuente_id, clave_entidad, nombre_entidad,
+      numero_distrito_federal, clave_municipio, nombre_municipio,
+      numero_seccion, marco_cartografico_fecha, filas_origen,
+      registro_sha256, pobtot
+    ) values (
+      v_source_id, '15', 'México', '001', '001', 'Acambay', '0003',
+      date '2026-01-31', '{"Población":7}'::jsonb,
+      pg_catalog.repeat('6', 64), 30
+    );
+    raise exception 'ECEG section outside January 2021 frame was accepted';
+  exception
+    when check_violation then null;
+  end;
 
   begin
     insert into public.demografia_eceg_secciones (
@@ -212,6 +251,50 @@ begin
   ) values (
     v_source_id, 'SECCIONES_ECEG', 1, 2, 2, pg_catalog.repeat('5', 64)
   );
+
+  update public.demografia_fuentes
+  set estado = 'PUBLICADA',
+      validated_at = pg_catalog.now(),
+      published_at = pg_catalog.now()
+  where demografia_fuente_id = v_source_id;
+
+  begin
+    update public.demografia_eceg_secciones
+    set pobtot = 11
+    where demografia_eceg_seccion_id = v_eceg_id;
+    raise exception 'published ECEG section was mutable';
+  exception
+    when sqlstate '55000' then null;
+  end;
+
+  begin
+    update public.demografia_eceg_correspondencias
+    set evidencia = '{"changed":true}'::jsonb
+    where demografia_eceg_seccion_id = v_eceg_id;
+    raise exception 'published ECEG correspondence was mutable';
+  exception
+    when sqlstate '55000' then null;
+  end;
+
+  begin
+    insert into public.demografia_indicadores (
+      demografia_fuente_id, mnemonico, nombre, tipo_logico, orden
+    ) values (
+      v_source_id, 'POST_PUBLICACION', 'No permitido', 'ENTERO', 219
+    );
+    raise exception 'published ECEG indicator was mutable';
+  exception
+    when sqlstate '55000' then null;
+  end;
+
+  begin
+    update public.demografia_fuentes
+    set archivo_nombre = 'changed.xlsx'
+    where demografia_fuente_id = v_source_id;
+    raise exception 'published ECEG source metadata was mutable';
+  exception
+    when sqlstate '55000' then null;
+  end;
 end
 $behavior$;
 

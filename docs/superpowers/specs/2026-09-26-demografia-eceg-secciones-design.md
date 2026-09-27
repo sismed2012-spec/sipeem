@@ -97,8 +97,9 @@ equivalencia oficial o una recomputación desde unidades censales más finas.
 
 ### 5.1 Fuente e indicadores
 
-`demografia_fuentes` registra una nueva fuente `CPV2020_ECEG` con el hash del
-ZIP, el hash del XLSX, el corte cartográfico y los conteos conciliados.
+`demografia_fuentes` registra una nueva fuente `CPV2020_ECEG` con el hash
+observado del XLSX, el hash de referencia del ZIP oficial, el corte
+cartográfico y los conteos conciliados.
 `demografia_indicadores` conserva los 220 indicadores normalizados, el tema,
 el encabezado oficial, tipo lógico, unidad y reglas de reserva.
 
@@ -114,6 +115,7 @@ Tabla cruda por sección de origen:
 - estados de dato en `estados_dato jsonb`
 
 La clave única es `(demografia_fuente_id, clave_entidad, numero_seccion)`.
+El corte permitido para este conjunto es exactamente `2021-01-31`.
 
 ### 5.3 `demografia_eceg_correspondencias`
 
@@ -148,17 +150,23 @@ incluye:
 Los conteos de localidades son nulos para ECEG y conservan su significado
 actual para ITER.
 
+Una fuente ECEG validada o publicada es inmutable junto con sus indicadores,
+filas y correspondencias. Una nueva normalización requiere una fuente nueva,
+no la reescritura por lotes de la fuente visible.
+
 ## 6. Pipeline
 
 1. Perfilar el ZIP/XLSX sin escribir en Supabase.
 2. Validar hojas, encabezados, claves, conteos y conciliación estatal.
-3. Crear o recuperar la fuente por hash.
+3. Crear o recuperar por hash únicamente una fuente en estado cargable.
 4. Cargar diccionario y 6,544 secciones en lotes de 250.
    Los lotes seccionales codifican el diccionario una sola vez y los valores
    como arreglos posicionales; el SQL real más grande verificado es de 622,617
    bytes, por debajo del límite observado del canal de consulta.
 5. Construir correspondencias contra una versión explícita de SIPEEM.
-6. Publicar únicamente las correspondencias `DIRECTA`.
+6. Validar y publicar fuente y correspondencias en una sola transacción. Sólo
+   `DIRECTA` y `VINCULO_HISTORICO` pueden resolver una sección destino; las
+   filas `SIN_EQUIVALENCIA` quedan publicadas únicamente para auditoría.
 7. Ejecutar postflight de conteos, población, duplicados, seguridad y RPC.
 8. Verificar la interfaz en Preview; no desplegar a PROD.
 
@@ -174,7 +182,8 @@ actual para ITER.
 - 651 secciones actuales sin ECEG directo visibles como no disponibles o con
   fallback ITER explícito.
 - El RPC y la interfaz muestran fuente, año, marco de origen y advertencia.
-- Interrumpir y reanudar no repite lotes confirmados.
+- Interrumpir y reanudar vuelve a presentar los lotes, pero el ledger remoto
+  reconoce los checksums confirmados y evita repetir sus escrituras.
 - RLS, grants y funciones pasan pruebas allow/deny.
 - SIPEEM-DEV es el único destino; PROD no cambia.
 

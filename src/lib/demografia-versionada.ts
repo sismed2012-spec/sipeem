@@ -182,6 +182,9 @@ function normalizeRow(
   if (sourceGrain === "SECCION" && sourceFrameDate === null) {
     return gatewayFailure("source.sourceFrameDate");
   }
+  if (datasetKey === "CPV2020_ECEG" && sourceFrameDate !== "2021-01-31") {
+    return gatewayFailure("source.sourceFrameDate");
+  }
   const mappingMethod = asNonemptyString(source.mappingMethod, "source.mappingMethod");
   const mappingStatus = asNonemptyString(source.mappingStatus, "source.mappingStatus");
   const warnings = asStringArray(source.warnings, "source.warnings");

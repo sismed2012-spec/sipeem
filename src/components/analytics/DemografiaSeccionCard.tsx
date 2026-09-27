@@ -86,10 +86,17 @@ function mappingLabel(data: DemografiaSeccionResponse): string | null {
   return null;
 }
 
+function sourceFrameLabel(frameDate: string | null): string | null {
+  if (frameDate === null) return null;
+  if (frameDate === "2021-01-31") return "Marco INE enero 2021";
+  return `Marco INE ${frameDate}`;
+}
+
 export function DemografiaSeccionCard({ data }: Props) {
   const warning = statusMessage(data.status);
   const mapping = mappingLabel(data);
   const isSectionGrain = data.source.sourceGrain === "SECCION";
+  const frameLabel = sourceFrameLabel(data.source.sourceFrameDate);
   return (
     <section className="space-y-2 rounded-lg border border-sky-100 bg-sky-50/50 p-2.5">
       <div>
@@ -99,9 +106,9 @@ export function DemografiaSeccionCard({ data }: Props) {
         <div className="mt-0.5 text-[9px] text-slate-500">
           {sourceTitle(data)}
         </div>
-        {isSectionGrain && data.source.sourceFrameDate === "2021-01-31" && (
+        {isSectionGrain && frameLabel && (
           <div className="text-[9px] font-medium text-amber-700">
-            Marco INE enero 2021
+            {frameLabel}
           </div>
         )}
         {data.source.sourceGrain === "LOCALIDAD" && (

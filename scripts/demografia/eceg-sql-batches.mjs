@@ -103,29 +103,38 @@ function buildBatches(rows, options, stage, sqlBuilder, startingSequence) {
 function sourceSql(descriptor) {
   const payload = encodePayload(descriptor.rows[0]);
   return `begin;
-with payload as (
-  select pg_catalog.convert_from(
+do $source$
+declare
+  v_payload jsonb := pg_catalog.convert_from(
     pg_catalog.decode('${payload}', 'base64'), 'UTF8'
-  )::jsonb as value
-)
-insert into public.demografia_fuentes (
-  proveedor, conjunto, anio_censal, clave_entidad, archivo_nombre,
-  archivo_sha256, codificaciones, filas_total, columnas_total, metadatos
-)
-select
-  'INEGI', 'CPV2020_ECEG', 2020, '15', value ->> 'archivo_nombre',
-  value ->> 'archivo_sha256', value -> 'codificaciones',
-  (value ->> 'filas_total')::integer,
-  (value ->> 'columnas_total')::smallint,
-  value -> 'metadatos'
-from payload
-on conflict on constraint demografia_fuentes_identidad_uk do update set
-  archivo_nombre = excluded.archivo_nombre,
-  codificaciones = excluded.codificaciones,
-  filas_total = excluded.filas_total,
-  columnas_total = excluded.columnas_total,
-  metadatos = excluded.metadatos,
-  updated_at = pg_catalog.now();
+  )::jsonb;
+  v_source_id bigint;
+begin
+  insert into public.demografia_fuentes (
+    proveedor, conjunto, anio_censal, clave_entidad, archivo_nombre,
+    archivo_sha256, codificaciones, filas_total, columnas_total, metadatos
+  ) values (
+    'INEGI', 'CPV2020_ECEG', 2020, '15', v_payload ->> 'archivo_nombre',
+    v_payload ->> 'archivo_sha256', v_payload -> 'codificaciones',
+    (v_payload ->> 'filas_total')::integer,
+    (v_payload ->> 'columnas_total')::smallint,
+    v_payload -> 'metadatos'
+  )
+  on conflict on constraint demografia_fuentes_identidad_uk do update set
+    archivo_nombre = excluded.archivo_nombre,
+    codificaciones = excluded.codificaciones,
+    filas_total = excluded.filas_total,
+    columnas_total = excluded.columnas_total,
+    metadatos = excluded.metadatos,
+    updated_at = pg_catalog.now()
+  where public.demografia_fuentes.estado in ('PREPARADA', 'CARGANDO')
+  returning demografia_fuente_id into v_source_id;
+
+  if v_source_id is null then
+    raise exception 'ECEG source is immutable after validation or publication';
+  end if;
+end
+$source$;
 commit;
 `;
 }
@@ -149,16 +158,22 @@ declare
     pg_catalog.decode('${payload}', 'base64'), 'UTF8'
   )::jsonb;
   v_source_id bigint;
+  v_source_state text;
   v_batch_id bigint;
   v_affected integer;
 begin
-  select demografia_fuente_id into strict v_source_id
+  select demografia_fuente_id, estado into strict v_source_id, v_source_state
   from public.demografia_fuentes
   where proveedor = 'INEGI'
     and conjunto = 'CPV2020_ECEG'
     and anio_censal = 2020
     and clave_entidad = '15'
-    and archivo_sha256 = v_payload ->> 'sourceHash';
+    and archivo_sha256 = v_payload ->> 'sourceHash'
+  for update;
+
+  if v_source_state not in ('PREPARADA', 'CARGANDO') then
+    raise exception 'ECEG source is immutable in state %', v_source_state;
+  end if;
 
   if exists (
     select 1 from public.demografia_cargas_lotes

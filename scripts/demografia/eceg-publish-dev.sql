@@ -6,6 +6,11 @@ declare
   v_population bigint;
   v_published_at timestamptz := pg_catalog.clock_timestamp();
 begin
+  if pg_catalog.current_setting('sipeem.project_ref', true)
+      is distinct from 'nppvprbfmjbhwheghipa' then
+    raise exception 'ECEG publication is restricted to SIPEEM-DEV';
+  end if;
+
   select demografia_fuente_id, estado
     into strict v_source_id, v_source_state
   from public.demografia_fuentes
@@ -19,6 +24,14 @@ begin
 
   if v_source_state <> 'PREPARADA' then
     raise exception 'ECEG source must be PREPARADA, got %', v_source_state;
+  end if;
+
+  select pg_catalog.count(*) into v_count
+  from public.demografia_fuentes
+  where demografia_fuente_id = v_source_id
+    and metadatos ->> 'sourceFrameDate' = '2021-01-31';
+  if v_count <> 1 then
+    raise exception 'ECEG source metadata must declare frame 2021-01-31';
   end if;
 
   select pg_catalog.count(*) into v_count
@@ -52,6 +65,14 @@ begin
   if v_count <> 6544 or v_population <> 16992418 then
     raise exception 'ECEG sections/population %/%, expected 6544/16992418',
       v_count, v_population;
+  end if;
+
+  select pg_catalog.count(*) into v_count
+  from public.demografia_eceg_secciones
+  where demografia_fuente_id = v_source_id
+    and marco_cartografico_fecha <> date '2021-01-31';
+  if v_count <> 0 then
+    raise exception 'ECEG has % rows outside frame 2021-01-31', v_count;
   end if;
 
   select pg_catalog.count(*) into v_count

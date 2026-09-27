@@ -55,6 +55,8 @@ test("buildEcegSourceBatch is deterministic and hides source metadata in base64"
   assert.equal(first.checksum, second.checksum);
   assert.equal(first.sql, second.sql);
   assert.match(first.sql, /CPV2020_ECEG/);
+  assert.match(first.sql, /estado in \('PREPARADA', 'CARGANDO'\)/i);
+  assert.match(first.sql, /ECEG source is immutable/i);
   assert.match(first.sql, /decode\('[A-Za-z0-9+/=]+', 'base64'\)/);
   assert.doesNotMatch(first.sql, /ECEG_Distritos_Secciones_Nacional\.xlsx/);
 });
@@ -121,6 +123,8 @@ test("buildEcegSectionBatches uses resumable inclusive ranges of 250", () => {
   );
   assert.match(batches[0].sql, /SECCIONES_ECEG/);
   assert.match(batches[0].sql, /DEMOGRAFIA_BATCH_ALREADY_CONFIRMED/);
+  assert.match(batches[0].sql, /v_source_state not in \('PREPARADA', 'CARGANDO'\)/i);
+  assert.match(batches[0].sql, /for update/i);
   assert.match(batches[0].sql, /on conflict on constraint demografia_eceg_secciones_clave_uk/i);
   assert.doesNotMatch(batches[0].sql, /Acambay/);
 });

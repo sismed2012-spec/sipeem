@@ -154,6 +154,49 @@ describe("getVersionedSectionDemographics", () => {
     assert.equal(result.indicators.pobtot, 2994);
   });
 
+  it("rejects ECEG data outside the approved January 2021 source frame", async () => {
+    const invoke: DemografiaRpcInvoker = async () => ({
+      data: [{
+        section_id: 2221,
+        version_id: 4025,
+        source: {
+          provider: "INEGI",
+          datasetKey: "CPV2020_ECEG",
+          censusYear: 2020,
+          sourceGrain: "SECCION",
+          sourceFrameDate: "2026-01-31",
+          mappingMethod: "CLAVE_NUMERICA",
+          mappingStatus: "VINCULO_HISTORICO",
+          warnings: [],
+        },
+        status: "COMPLETE",
+        coverage: {
+          includedLocalities: null,
+          pendingLocalities: null,
+          includedPopulation: 2994,
+          pendingPopulationReference: null,
+          percentage: null,
+          isAdditive: false,
+        },
+        indicators: { pobtot: 2994 },
+      }],
+      error: null,
+    });
+
+    await assert.rejects(
+      () => getVersionedSectionDemographics(invoke, {
+        sectionId: 2221,
+        versionId: 4025,
+        censusYear: 2020,
+      }),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.match(String(error.cause), /sourceFrameDate/);
+        return true;
+      }
+    );
+  });
+
   it("rejects a response that mixes section-grain ECEG with locality coverage", async () => {
     const invoke: DemografiaRpcInvoker = async () => ({
       data: [{
