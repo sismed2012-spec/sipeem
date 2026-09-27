@@ -99,4 +99,3 @@ describe("CartografiaVersionSelector", () => {
     assert.equal(new Set(ids).size, 2);
   });
 });
-

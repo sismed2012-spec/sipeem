@@ -47,4 +47,3 @@ export async function runAuthenticatedCartografiaRequest<T>({
     return privateJson({ error: "Error interno al consultar la cartografia" }, 500);
   }
 }
-

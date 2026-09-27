@@ -16,4 +16,3 @@ export function createCartografiaServiceInvoker(): CartografiaRpcInvoker {
 
   return (functionName, args) => supabase.rpc(functionName, args);
 }
-

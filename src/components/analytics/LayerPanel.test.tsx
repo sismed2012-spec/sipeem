@@ -19,4 +19,3 @@ describe("LayerPanel", () => {
     assert.match(html, /disabled=""/);
   });
 });
-

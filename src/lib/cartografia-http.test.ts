@@ -81,4 +81,3 @@ describe("runAuthenticatedCartografiaRequest", () => {
     assert.equal(logged[0].message, "permission denied for secret_table");
   });
 });
-
