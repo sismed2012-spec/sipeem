@@ -119,17 +119,17 @@ runner.
 - Consumes: perfil de Task 1 y tablas de Task 2.
 - Produces: manifiesto, SQL por lotes de 250 y ejecución protegida.
 
-- [ ] Escribir pruebas fallidas para SQL determinista, payload base64, checksum,
+- [x] Escribir pruebas fallidas para SQL determinista, payload base64, checksum,
   reanudación, detención al primer fallo y rechazo de todo project ref distinto
   de DEV.
-- [ ] Implementar lotes de fuente, indicadores y 6,544 secciones.
-- [ ] Implementar vínculos `CLAVE_NUMERICA` como `VINCULO_HISTORICO` para una
+- [x] Implementar lotes de fuente, indicadores y 6,544 secciones.
+- [x] Implementar vínculos `CLAVE_NUMERICA` como `VINCULO_HISTORICO` para una
   versión destino explícita y `SIN_MATCH` para el resto; reservar `DIRECTA`
   para equivalencia oficial o geométrica verificada.
-- [ ] Probar con fixtures que 1:N nunca genera varias publicaciones.
-- [ ] Ejecutar el dry-run real y conciliar 6,401 candidatas numéricas, 143 sin
+- [x] Probar con fixtures que 1:N nunca genera varias publicaciones.
+- [x] Ejecutar el dry-run real y conciliar 6,401 candidatas numéricas, 143 sin
   equivalencia, 651 destinos sin fuente y 1,800,168 habitantes pendientes.
-- [ ] Commit: `feat: import ECEG demographics with safe resume`.
+- [x] Commit: `feat: import ECEG demographics with safe resume`.
 
 ## Task 4: Prefer ECEG in the Authenticated Read API
 

@@ -154,6 +154,9 @@ actual para ITER.
 2. Validar hojas, encabezados, claves, conteos y conciliación estatal.
 3. Crear o recuperar la fuente por hash.
 4. Cargar diccionario y 6,544 secciones en lotes de 250.
+   Los lotes seccionales codifican el diccionario una sola vez y los valores
+   como arreglos posicionales; el SQL real más grande verificado es de 622,617
+   bytes, por debajo del límite observado del canal de consulta.
 5. Construir correspondencias contra una versión explícita de SIPEEM.
 6. Publicar únicamente las correspondencias `DIRECTA`.
 7. Ejecutar postflight de conteos, población, duplicados, seguridad y RPC.
