@@ -17,6 +17,7 @@ import { SeccionPopup, type ArcGISSeccionProps } from "./SeccionPopup";
 import { resolvePopupContext } from "./map-popup-resolvers";
 import { isSectionSelectionCurrent } from "@/lib/cartografia-map";
 import { resolveDemografiaSectionId } from "@/lib/demografia-map";
+import type { TerritorialThemePresentation } from "@/lib/territorial-indicators-map";
 
 type FeatureProperties = Record<string, string | number | null | undefined>;
 type MapFeature = GeoJSON.Feature<GeoJSON.Geometry, GeoJSON.GeoJsonProperties>;
@@ -40,6 +41,7 @@ interface Props {
   onVerSecciones?: () => void;
   coberturaMap?: Record<number, { compromisos: number; meta: number }>;
   cartografiaVersionId?: number | null;
+  territorialTheme?: TerritorialThemePresentation | null;
 }
 
 interface HoveredMunicipio {
