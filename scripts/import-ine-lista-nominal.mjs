@@ -12,6 +12,7 @@ import {
   buildPublishBatch,
   buildSectionBatches,
 } from "./lista-nominal/sql-batches.mjs";
+import { buildListaNominalCrosswalkBatch } from "./lista-nominal/crosswalk.mjs";
 import {
   DEV_PROJECT_REF,
   assertDevProjectRef,
@@ -49,7 +50,13 @@ export function parseListaNominalImportArgs(argv) {
   if (!Number.isSafeInteger(cartographyVersionId) || cartographyVersionId <= 0) {
     throw new Error("cartografia-version-id must be a positive integer");
   }
-  return { filePath, projectRef, cartographyVersionId, apply, publish };
+  return {
+    filePath,
+    projectRef,
+    cartographyVersionId,
+    apply: apply || publish,
+    publish,
+  };
 }
 
 export async function prepareListaNominalImport(filePath, options) {
@@ -65,6 +72,20 @@ export async function prepareListaNominalImport(filePath, options) {
   const profile = assertExpectedListaNominalProfile(
     buildListaNominalProfile(archive),
   );
+  if (options.publish) {
+    return {
+      sourceHash: archive.sourceHash,
+      cartographyVersionId: options.cartographyVersionId,
+      profile,
+      batches: [
+        buildPublishBatch({
+          sourceHash: archive.sourceHash,
+          cartographyVersionId: options.cartographyVersionId,
+        }),
+      ],
+    };
+  }
+
   const batches = [
     buildCutBatch({
       sourceHash: archive.sourceHash,
@@ -78,15 +99,12 @@ export async function prepareListaNominalImport(filePath, options) {
       sourceHash: archive.sourceHash,
       batchSize: options.batchSize,
     }),
+    buildListaNominalCrosswalkBatch({
+      sourceHash: archive.sourceHash,
+      cartographyVersionId: options.cartographyVersionId,
+      expectedRows: profile.sections,
+    }),
   ];
-  if (options.publish) {
-    batches.push(
-      buildPublishBatch({
-        sourceHash: archive.sourceHash,
-        cartographyVersionId: options.cartographyVersionId,
-      }),
-    );
-  }
   return {
     sourceHash: archive.sourceHash,
     cartographyVersionId: options.cartographyVersionId,

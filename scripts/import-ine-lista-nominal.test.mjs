@@ -6,6 +6,7 @@ import { after, describe, it } from "node:test";
 
 import {
   parseListaNominalImportArgs,
+  prepareListaNominalImport,
   runListaNominalImport,
   saveConfirmedChecksumsAtomically,
   writeListaNominalArtifacts,
@@ -73,6 +74,46 @@ describe("nominal-list import CLI", () => {
           "4025",
         ]),
       /only SIPEEM-DEV/i,
+    );
+  });
+
+  it("treats explicit publish mode as a one-shot applied transition", () => {
+    const options = parseListaNominalImportArgs([
+      "S.xlsx",
+      "--project-ref",
+      DEV_PROJECT_REF,
+      "--cartografia-version-id",
+      "4025",
+      "--publish",
+    ]);
+    assert.equal(options.publish, true);
+    assert.equal(options.apply, true);
+  });
+
+  it("appends crosswalk to imports and isolates publish to one batch", async () => {
+    const common = {
+      projectRef: DEV_PROJECT_REF,
+      cartographyVersionId: 4025,
+    };
+    const normal = await prepareListaNominalImport(
+      "C:/Users/NZXT/Downloads/S.xlsx",
+      { ...common, publish: false },
+    );
+    assert.equal(normal.batches.at(-1).stage, "CORRESPONDENCIAS");
+    assert.equal(
+      normal.batches
+        .filter((batch) => batch.stage === "SECCIONES")
+        .reduce((sum, batch) => sum + batch.expectedRows, 0),
+      7191,
+    );
+
+    const publication = await prepareListaNominalImport(
+      "C:/Users/NZXT/Downloads/S.xlsx",
+      { ...common, publish: true },
+    );
+    assert.deepEqual(
+      publication.batches.map((batch) => batch.stage),
+      ["PUBLICACION"],
     );
   });
 
