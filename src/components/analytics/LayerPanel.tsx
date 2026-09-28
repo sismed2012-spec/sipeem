@@ -26,6 +26,7 @@ interface Props {
   activeOverlays: Set<OverlayKey>;
   onToggle: (key: OverlayKey) => void;
   hasMunicipioSelected: boolean;
+  sectionAvailable?: boolean;
   coberturaMap?: Record<number, { compromisos: number; meta: number }>;
   className?: string;
 }
@@ -34,6 +35,7 @@ export function LayerPanel({
   activeOverlays,
   onToggle,
   hasMunicipioSelected,
+  sectionAvailable = true,
   coberturaMap = {},
   className,
 }: Props) {
@@ -59,13 +61,20 @@ export function LayerPanel({
 
       {OVERLAY_LAYERS.map((layer) => {
         const active = activeOverlays.has(layer.key);
-        const disabled = layer.lazy && !hasMunicipioSelected && !active;
+        const disabled =
+          layer.lazy &&
+          (!hasMunicipioSelected || !sectionAvailable) &&
+          !active;
+        const disabledTitle = !sectionAvailable
+          ? "Cartografía versionada no disponible"
+          : "Selecciona un municipio primero";
 
         return (
           <button
             key={layer.key}
             onClick={() => !disabled && onToggle(layer.key)}
-            title={disabled ? "Selecciona un municipio primero" : undefined}
+            title={disabled ? disabledTitle : undefined}
+            disabled={disabled}
             className={cn(
               "w-full flex items-center gap-2 py-1.5 border-b border-slate-700/30 last:border-0 text-left transition-opacity",
               disabled && "opacity-40 cursor-not-allowed"

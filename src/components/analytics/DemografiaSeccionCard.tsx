@@ -67,8 +67,36 @@ function statusMessage(status: DemografiaSeccionResponse["status"]): string | nu
   return null;
 }
 
+function sourceTitle(data: DemografiaSeccionResponse): string {
+  if (data.source.datasetKey === "CPV2020_ECEG") return "INEGI ECEG 2020";
+  if (data.source.datasetKey === "CPV2020_ITER") return "INEGI ITER 2020";
+  return `INEGI · Censo ${data.source.censusYear}`;
+}
+
+function mappingLabel(data: DemografiaSeccionResponse): string | null {
+  if (data.source.mappingStatus === "VINCULO_HISTORICO") {
+    return "Vínculo histórico por clave numérica";
+  }
+  if (data.source.mappingStatus === "DIRECTA") {
+    return "Equivalencia territorial verificada";
+  }
+  if (data.source.mappingStatus === "SIN_EQUIVALENCIA") {
+    return "Sin equivalencia territorial";
+  }
+  return null;
+}
+
+function sourceFrameLabel(frameDate: string | null): string | null {
+  if (frameDate === null) return null;
+  if (frameDate === "2021-01-31") return "Marco INE enero 2021";
+  return `Marco INE ${frameDate}`;
+}
+
 export function DemografiaSeccionCard({ data }: Props) {
   const warning = statusMessage(data.status);
+  const mapping = mappingLabel(data);
+  const isSectionGrain = data.source.sourceGrain === "SECCION";
+  const frameLabel = sourceFrameLabel(data.source.sourceFrameDate);
   return (
     <section className="space-y-2 rounded-lg border border-sky-100 bg-sky-50/50 p-2.5">
       <div>
@@ -76,17 +104,31 @@ export function DemografiaSeccionCard({ data }: Props) {
           Demografía INEGI
         </div>
         <div className="mt-0.5 text-[9px] text-slate-500">
-          {data.source.provider} · {data.source.datasetKey} · Censo {data.source.censusYear}
+          {sourceTitle(data)}
         </div>
+        {isSectionGrain && frameLabel && (
+          <div className="text-[9px] font-medium text-amber-700">
+            {frameLabel}
+          </div>
+        )}
+        {data.source.sourceGrain === "LOCALIDAD" && (
+          <div className="text-[9px] text-slate-500">
+            Fuente complementaria por localidad
+          </div>
+        )}
+        {mapping && <div className="text-[9px] text-slate-600">{mapping}</div>}
         <div className="text-[9px] text-slate-500">
           Versión cartográfica {data.versionId}
         </div>
       </div>
 
       {data.status === "UNAVAILABLE" ? (
-        <p className="rounded border border-slate-200 bg-white px-2 py-2 text-[10px] text-slate-500">
-          Datos demográficos no disponibles
-        </p>
+        <div className="rounded border border-slate-200 bg-white px-2 py-2 text-[10px] text-slate-500">
+          <p>Datos demográficos no disponibles</p>
+          <p className="mt-1 text-[9px]">
+            Sin equivalencia ECEG publicada ni respaldo ITER disponible.
+          </p>
+        </div>
       ) : (
         <>
           {warning && (
@@ -94,17 +136,31 @@ export function DemografiaSeccionCard({ data }: Props) {
               {warning}
             </p>
           )}
-          <div className="rounded border border-sky-100 bg-white px-2 py-1.5 text-[9px] text-slate-600">
-            <div>
-              {data.coverage.includedLocalities} localidades incluidas ·{" "}
-              {data.coverage.pendingLocalities} pendientes
+          {data.source.warnings.map((sourceWarning) => (
+            <p
+              key={sourceWarning}
+              className="rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-[9px] text-amber-800"
+            >
+              {sourceWarning}
+            </p>
+          ))}
+          {isSectionGrain ? (
+            <div className="rounded border border-sky-100 bg-white px-2 py-1.5 text-[9px] text-slate-600">
+              Dato original publicado a nivel de sección electoral.
             </div>
-            <div className="font-medium text-slate-700">
-              {data.coverage.percentage == null
-                ? "Cobertura no calculable"
-                : `Cobertura ${numberFormatter.format(data.coverage.percentage)}%`}
+          ) : (
+            <div className="rounded border border-sky-100 bg-white px-2 py-1.5 text-[9px] text-slate-600">
+              <div>
+                {data.coverage.includedLocalities} localidades incluidas ·{" "}
+                {data.coverage.pendingLocalities} pendientes
+              </div>
+              <div className="font-medium text-slate-700">
+                {data.coverage.percentage == null
+                  ? "Cobertura no calculable"
+                  : `Cobertura ${numberFormatter.format(data.coverage.percentage)}%`}
+              </div>
             </div>
-          </div>
+          )}
 
           {GROUPS.map((group) => (
             <div key={group.title}>

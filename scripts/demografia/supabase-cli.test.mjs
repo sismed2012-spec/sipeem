@@ -64,7 +64,7 @@ test("executeManifest dry-run never starts an external process", async () => {
   assert.deepEqual(result.planned, ["b1", "b2"]);
 });
 
-test("executeManifest skips locally confirmed checksums and runs the next batch once", async () => {
+test("executeManifest submits every batch and lets the remote ledger decide idempotence", async () => {
   const calls = [];
   const confirmed = [];
   const result = await executeManifest(manifest, {
@@ -78,11 +78,13 @@ test("executeManifest skips locally confirmed checksums and runs the next batch 
     onBatchConfirmed: async (batch) => confirmed.push(batch.checksum),
   });
 
-  assert.equal(calls.length, 1);
+  assert.equal(calls.length, 2);
   assert.notEqual(calls[0].command.toLowerCase(), "npm.cmd");
-  assert.match(calls[0].args.at(-1), /b2\.sql$/);
-  assert.deepEqual(confirmed, ["b".repeat(64)]);
-  assert.deepEqual(result.skipped, ["b1"]);
+  assert.match(calls[0].args.at(-1), /b1\.sql$/);
+  assert.match(calls[1].args.at(-1), /b2\.sql$/);
+  assert.deepEqual(confirmed, ["a".repeat(64), "b".repeat(64)]);
+  assert.deepEqual(result.skipped, []);
+  assert.deepEqual(result.completed, ["b1", "b2"]);
 });
 
 test("executeManifest stops on the first failure and never retries automatically", async () => {

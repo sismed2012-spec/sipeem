@@ -2,8 +2,8 @@ import { getUsuarioActual } from "@/actions/auth";
 import { runAuthenticatedCartografiaRequest } from "@/lib/cartografia-http";
 import { createCartografiaServiceInvoker } from "@/lib/cartografia-server";
 import {
-  getVersionedSections,
-  parseViewportParams,
+  parseResolverParams,
+  resolveVersionedTerritory,
 } from "@/lib/cartografia-versionada";
 
 export const dynamic = "force-dynamic";
@@ -13,9 +13,9 @@ export async function GET(request: Request) {
     authenticate: getUsuarioActual,
     createInvoker: createCartografiaServiceInvoker,
     execute: (invoke) =>
-      getVersionedSections(
+      resolveVersionedTerritory(
         invoke,
-        parseViewportParams(new URL(request.url).searchParams)
+        parseResolverParams(new URL(request.url).searchParams)
       ),
   });
 }

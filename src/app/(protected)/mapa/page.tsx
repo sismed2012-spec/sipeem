@@ -2,28 +2,12 @@ import { Suspense } from "react";
 import { getUsuarioActual } from "@/actions/auth";
 import { ElectoralMapContainer } from "@/components/analytics/ElectoralMapContainer";
 import { getBaseMapData } from "@/lib/arcgis";
-import { loadInitialCartografiaVersionId } from "@/lib/cartografia-map";
-import { createCartografiaServiceInvoker } from "@/lib/cartografia-server";
-
-async function getInitialCartografiaVersionId(): Promise<number | null> {
-  try {
-    return await loadInitialCartografiaVersionId(
-      createCartografiaServiceInvoker()
-    );
-  } catch (error) {
-    console.error("No se pudo resolver la version cartografica activa", error);
-    return null;
-  }
-}
 
 export default async function MapaPage() {
   const usuario = await getUsuarioActual();
   const isAnalytic = usuario?.rol === "admin" || usuario?.rol === "director";
 
-  const [geoData, cartografiaVersionId] = await Promise.all([
-    getBaseMapData(),
-    getInitialCartografiaVersionId(),
-  ]);
+  const geoData = await getBaseMapData();
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] bg-slate-50/50">
@@ -52,11 +36,7 @@ export default async function MapaPage() {
 
       <div className="flex-1 overflow-hidden relative">
         <Suspense fallback={<MapSkeleton />}>
-          <ElectoralMapContainer
-            isAnalytic={isAnalytic}
-            geoData={geoData}
-            cartografiaVersionId={cartografiaVersionId}
-          />
+          <ElectoralMapContainer isAnalytic={isAnalytic} geoData={geoData} />
         </Suspense>
       </div>
     </div>

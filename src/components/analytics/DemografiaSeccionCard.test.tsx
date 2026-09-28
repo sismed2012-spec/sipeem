@@ -12,7 +12,16 @@ function response(
   return {
     sectionId: 2221,
     versionId: 4025,
-    source: { provider: "INEGI", datasetKey: "CPV2020_ITER", censusYear: 2020 },
+    source: {
+      provider: "INEGI",
+      datasetKey: "CPV2020_ITER",
+      censusYear: 2020,
+      sourceGrain: "LOCALIDAD",
+      sourceFrameDate: null,
+      mappingMethod: "SOLO_DIRECTAS",
+      mappingStatus: "COMPLETE",
+      warnings: [],
+    },
     status: "COMPLETE",
     coverage: {
       includedLocalities: 4,
@@ -40,11 +49,11 @@ function response(
 }
 
 describe("DemografiaSeccionCard", () => {
-  it("shows source, census year, version and core indicators in es-MX", () => {
+  it("shows ITER fallback provenance, version and core indicators in es-MX", () => {
     const html = renderToStaticMarkup(<DemografiaSeccionCard data={response()} />);
 
-    assert.match(html, /INEGI/);
-    assert.match(html, /Censo 2020/);
+    assert.match(html, /INEGI ITER 2020/);
+    assert.match(html, /Fuente complementaria por localidad/);
     assert.match(html, /Versión cartográfica 4025/);
     assert.match(html, /1,234,567/);
     assert.match(html, /8\.75/);
@@ -52,6 +61,65 @@ describe("DemografiaSeccionCard", () => {
     assert.match(html, /Educación y economía/);
     assert.match(html, /Vivienda y servicios/);
     assert.match(html, /Conectividad/);
+  });
+
+  it("shows ECEG section grain, January 2021 frame and historical-link warning", () => {
+    const html = renderToStaticMarkup(<DemografiaSeccionCard data={response({
+      source: {
+        provider: "INEGI",
+        datasetKey: "CPV2020_ECEG",
+        censusYear: 2020,
+        sourceGrain: "SECCION",
+        sourceFrameDate: "2021-01-31",
+        mappingMethod: "CLAVE_NUMERICA",
+        mappingStatus: "VINCULO_HISTORICO",
+        warnings: ["No implica igualdad geométrica con 2026"],
+      },
+      coverage: {
+        includedLocalities: null,
+        pendingLocalities: null,
+        includedPopulation: 1234567,
+        pendingPopulationReference: null,
+        percentage: null,
+        isAdditive: false,
+      },
+    })} />);
+
+    assert.match(html, /INEGI ECEG 2020/);
+    assert.match(html, /Marco INE enero 2021/);
+    assert.match(html, /Vínculo histórico por clave numérica/);
+    assert.match(html, /No implica igualdad geométrica con 2026/);
+    assert.doesNotMatch(html, /localidades incluidas/);
+  });
+
+  it("distinguishes a verified direct ECEG match from no territorial equivalence", () => {
+    const direct = renderToStaticMarkup(<DemografiaSeccionCard data={response({
+      source: {
+        provider: "INEGI",
+        datasetKey: "CPV2020_ECEG",
+        censusYear: 2020,
+        sourceGrain: "SECCION",
+        sourceFrameDate: "2021-01-31",
+        mappingMethod: "EQUIVALENCIA_OFICIAL",
+        mappingStatus: "DIRECTA",
+        warnings: [],
+      },
+    })} />);
+    const unmatched = renderToStaticMarkup(<DemografiaSeccionCard data={response({
+      source: {
+        provider: "INEGI",
+        datasetKey: "CPV2020_ECEG",
+        censusYear: 2020,
+        sourceGrain: "SECCION",
+        sourceFrameDate: "2021-01-31",
+        mappingMethod: "SIN_MATCH",
+        mappingStatus: "SIN_EQUIVALENCIA",
+        warnings: [],
+      },
+    })} />);
+
+    assert.match(direct, /Equivalencia territorial verificada/);
+    assert.match(unmatched, /Sin equivalencia territorial/);
   });
 
   it("shows an explicit partial warning and honest included/pending counts", () => {
@@ -81,6 +149,7 @@ describe("DemografiaSeccionCard", () => {
     const complete = renderToStaticMarkup(<DemografiaSeccionCard data={response()} />);
 
     assert.match(unavailable, /Datos demográficos no disponibles/);
+    assert.match(unavailable, /Sin equivalencia ECEG publicada ni respaldo ITER/);
     assert.match(complete, /Población femenina[\s\S]*—/);
   });
 });

@@ -1,5 +1,11 @@
 # Integración demográfica INEGI por sección — Diseño
 
+> **Superseded on 2026-09-26:** This ITER/locality-first design is retained as
+> implementation history. The approved primary source for section-level
+> demographics is now INEGI's *Estadísticas Censales a Escalas
+> Geoelectorales 2020*. Continue with
+> `docs/superpowers/specs/2026-09-26-demografia-eceg-secciones-design.md`.
+
 **Fecha:** 2026-09-26
 
 **Estado:** Aprobado en conversación

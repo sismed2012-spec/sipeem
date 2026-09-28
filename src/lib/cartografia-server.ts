@@ -2,11 +2,11 @@ import "server-only";
 
 import { createClient } from "@supabase/supabase-js";
 
-import { getDemografiaSupabaseConfig } from "./demografia-config";
+import { getCartografiaSupabaseConfig } from "./cartografia-config";
 import type { CartografiaRpcInvoker } from "./cartografia-versionada";
 
 export function createCartografiaServiceInvoker(): CartografiaRpcInvoker {
-  const { url, serviceRoleKey } = getDemografiaSupabaseConfig();
+  const { url, serviceRoleKey } = getCartografiaSupabaseConfig();
   const supabase = createClient(url, serviceRoleKey, {
     auth: {
       autoRefreshToken: false,

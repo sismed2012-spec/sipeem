@@ -1,6 +1,7 @@
 import type {
   DemografiaSeccionResponse,
   DemografiaSectionStatus,
+  DemografiaSourceGrain,
 } from "./demografia-types";
 
 export class DemografiaInputError extends Error {
@@ -106,15 +107,40 @@ function asNullableNumber(value: unknown, context: string): number | null {
   return parsed;
 }
 
+function asNullableNonnegativeInteger(value: unknown, context: string): number | null {
+  if (value === null) return null;
+  return asNonnegativeInteger(value, context);
+}
+
+function asNonemptyString(value: unknown, context: string): string {
+  const parsed = typeof value === "string" ? value.trim() : "";
+  if (!parsed) return gatewayFailure(context);
+  return parsed;
+}
+
+function asStringArray(value: unknown, context: string): string[] {
+  if (!Array.isArray(value)) return gatewayFailure(context);
+  return value.map((item, index) => asNonemptyString(item, `${context}.${index}`));
+}
+
 function unavailable(input: DemografiaSectionInput): DemografiaSeccionResponse {
   return {
     sectionId: input.sectionId,
     versionId: input.versionId,
-    source: { provider: "INEGI", datasetKey: "CPV2020_ITER", censusYear: input.censusYear },
+    source: {
+      provider: "INEGI",
+      datasetKey: "CPV2020_ECEG_OR_ITER",
+      censusYear: input.censusYear,
+      sourceGrain: null,
+      sourceFrameDate: null,
+      mappingMethod: null,
+      mappingStatus: null,
+      warnings: [],
+    },
     status: "UNAVAILABLE",
     coverage: {
-      includedLocalities: 0,
-      pendingLocalities: 0,
+      includedLocalities: null,
+      pendingLocalities: null,
       includedPopulation: null,
       pendingPopulationReference: null,
       percentage: null,
@@ -142,6 +168,26 @@ function normalizeRow(
   }
   const datasetKey = typeof source.datasetKey === "string" ? source.datasetKey.trim() : "";
   if (!datasetKey) return gatewayFailure("source.datasetKey");
+  const validGrains: DemografiaSourceGrain[] = ["SECCION", "LOCALIDAD"];
+  if (!validGrains.includes(source.sourceGrain as DemografiaSourceGrain)) {
+    return gatewayFailure("source.sourceGrain");
+  }
+  const sourceGrain = source.sourceGrain as DemografiaSourceGrain;
+  const sourceFrameDate = source.sourceFrameDate === null
+    ? null
+    : asNonemptyString(source.sourceFrameDate, "source.sourceFrameDate");
+  if (sourceFrameDate !== null && !/^\d{4}-\d{2}-\d{2}$/.test(sourceFrameDate)) {
+    return gatewayFailure("source.sourceFrameDate");
+  }
+  if (sourceGrain === "SECCION" && sourceFrameDate === null) {
+    return gatewayFailure("source.sourceFrameDate");
+  }
+  if (datasetKey === "CPV2020_ECEG" && sourceFrameDate !== "2021-01-31") {
+    return gatewayFailure("source.sourceFrameDate");
+  }
+  const mappingMethod = asNonemptyString(source.mappingMethod, "source.mappingMethod");
+  const mappingStatus = asNonemptyString(source.mappingStatus, "source.mappingStatus");
+  const warnings = asStringArray(source.warnings, "source.warnings");
 
   const validStatuses: DemografiaSectionStatus[] = ["COMPLETE", "PARTIAL", "PENDING"];
   if (!validStatuses.includes(row.status as DemografiaSectionStatus)) {
@@ -153,6 +199,21 @@ function normalizeRow(
   const percentage = asNullableNumber(coverage.percentage, "coverage.percentage");
   if (percentage !== null && percentage > 100) {
     return gatewayFailure("coverage.percentage");
+  }
+  const includedLocalities = asNullableNonnegativeInteger(
+    coverage.includedLocalities,
+    "coverage.includedLocalities"
+  );
+  const pendingLocalities = asNullableNonnegativeInteger(
+    coverage.pendingLocalities,
+    "coverage.pendingLocalities"
+  );
+  if (sourceGrain === "SECCION") {
+    if (includedLocalities !== null || pendingLocalities !== null) {
+      return gatewayFailure("coverage.localities for section grain");
+    }
+  } else if (includedLocalities === null || pendingLocalities === null) {
+    return gatewayFailure("coverage.localities for locality grain");
   }
 
   const rawIndicators = asRecord(row.indicators, "indicators");
@@ -166,17 +227,20 @@ function normalizeRow(
   return {
     sectionId,
     versionId,
-    source: { provider: "INEGI", datasetKey, censusYear },
+    source: {
+      provider: "INEGI",
+      datasetKey,
+      censusYear,
+      sourceGrain,
+      sourceFrameDate,
+      mappingMethod,
+      mappingStatus,
+      warnings,
+    },
     status,
     coverage: {
-      includedLocalities: asNonnegativeInteger(
-        coverage.includedLocalities,
-        "coverage.includedLocalities"
-      ),
-      pendingLocalities: asNonnegativeInteger(
-        coverage.pendingLocalities,
-        "coverage.pendingLocalities"
-      ),
+      includedLocalities,
+      pendingLocalities,
       includedPopulation: asNullableNumber(
         coverage.includedPopulation,
         "coverage.includedPopulation"

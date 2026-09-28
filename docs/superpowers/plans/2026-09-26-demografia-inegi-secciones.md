@@ -1,5 +1,11 @@
 # INEGI Demographics by Electoral Section Implementation Plan
 
+> **Superseded on 2026-09-26:** This ITER/locality-first plan is retained as
+> implementation history. The approved primary source for section-level
+> demographics is now INEGI's *Estadísticas Censales a Escalas
+> Geoelectorales 2020*. Continue with
+> `docs/superpowers/plans/2026-09-26-demografia-eceg-secciones.md`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement this plan task-by-task. Apply `superpowers:test-driven-development` to every behavior change and `superpowers:verification-before-completion` before claiming completion. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Importar de forma idempotente y reanudable los datos ITER del Censo 2020 de INEGI, conservarlos a nivel localidad y publicar en SIPEEM agregados por sección únicamente cuando una localidad pueda asignarse de forma territorialmente defendible a una sola sección.

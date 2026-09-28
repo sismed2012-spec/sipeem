@@ -1,14 +1,13 @@
 import {
   CartografiaGatewayError,
   CartografiaInputError,
-  getVersionedSections,
-  parseViewportParams,
   type CartografiaRpcInvoker,
 } from "./cartografia-versionada";
 
-interface CartografiaRouteDependencies {
+interface AuthenticatedCartografiaRequestOptions<T> {
   authenticate: () => Promise<unknown | null>;
   createInvoker: () => CartografiaRpcInvoker;
+  execute: (invoke: CartografiaRpcInvoker) => Promise<T>;
   onError?: (error: Error) => void;
 }
 
@@ -19,35 +18,32 @@ function privateJson(body: unknown, status = 200): Response {
   });
 }
 
-export function createCartografiaSectionsRoute({
+export async function runAuthenticatedCartografiaRequest<T>({
   authenticate,
   createInvoker,
+  execute,
   onError = console.error,
-}: CartografiaRouteDependencies) {
-  return async function GET(request: Request): Promise<Response> {
-    const user = await authenticate();
-    if (!user) return privateJson({ error: "No autenticado" }, 401);
+}: AuthenticatedCartografiaRequestOptions<T>): Promise<Response> {
+  const user = await authenticate();
+  if (!user) {
+    return privateJson({ error: "No autenticado" }, 401);
+  }
 
-    try {
-      const input = parseViewportParams(new URL(request.url).searchParams);
-      return privateJson(await getVersionedSections(createInvoker(), input));
-    } catch (error) {
-      if (error instanceof CartografiaInputError) {
-        return privateJson({ error: error.message }, error.status);
-      }
-      if (error instanceof CartografiaGatewayError) {
-        onError(error.cause);
-        return privateJson({ error: error.message }, error.status);
-      }
-      const internalError =
-        error instanceof Error
-          ? error
-          : new Error("Error cartografico desconocido");
-      onError(internalError);
-      return privateJson(
-        { error: "Error interno al consultar la cartografia" },
-        500
-      );
+  try {
+    const result = await execute(createInvoker());
+    return privateJson(result);
+  } catch (error) {
+    if (error instanceof CartografiaInputError) {
+      return privateJson({ error: error.message }, error.status);
     }
-  };
+    if (error instanceof CartografiaGatewayError) {
+      onError(error.cause);
+      return privateJson({ error: error.message }, error.status);
+    }
+
+    const internalError =
+      error instanceof Error ? error : new Error("Error cartografico desconocido");
+    onError(internalError);
+    return privateJson({ error: "Error interno al consultar la cartografia" }, 500);
+  }
 }

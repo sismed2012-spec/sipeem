@@ -4,6 +4,8 @@ export type DemografiaSectionStatus =
   | "PENDING"
   | "UNAVAILABLE";
 
+export type DemografiaSourceGrain = "SECCION" | "LOCALIDAD";
+
 export interface DemografiaSeccionResponse {
   sectionId: number;
   versionId: number;
@@ -11,11 +13,16 @@ export interface DemografiaSeccionResponse {
     provider: "INEGI";
     datasetKey: string;
     censusYear: number;
+    sourceGrain: DemografiaSourceGrain | null;
+    sourceFrameDate: string | null;
+    mappingMethod: string | null;
+    mappingStatus: string | null;
+    warnings: string[];
   };
   status: DemografiaSectionStatus;
   coverage: {
-    includedLocalities: number;
-    pendingLocalities: number;
+    includedLocalities: number | null;
+    pendingLocalities: number | null;
     includedPopulation: number | null;
     pendingPopulationReference: number | null;
     percentage: number | null;
