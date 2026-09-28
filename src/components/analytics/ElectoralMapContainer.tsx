@@ -35,6 +35,7 @@ import {
 } from "lucide-react";
 import { getCoberturaByMunicipio } from "@/actions/estructura";
 import { createClient } from "@/lib/supabase/client";
+import { buildSectionOverlayUrl } from "@/lib/cartografia-map";
 
 type MapFeatureCollection = GeoJSON.FeatureCollection<
   GeoJSON.Geometry,
@@ -53,19 +54,14 @@ interface SelectedMunicipioContext {
   municipioId: number | null;
 }
 
-function encodeWhereValue(value: string | number) {
-  if (typeof value === "number") return String(value);
-  const trimmed = value.trim();
-  if (/^\d+$/.test(trimmed)) return trimmed;
-  return `'${trimmed.replace(/'/g, "''")}'`;
-}
-
 export function ElectoralMapContainer({
   isAnalytic,
   geoData,
+  cartografiaVersionId,
 }: {
   isAnalytic: boolean;
   geoData: MapFeatureCollection;
+  cartografiaVersionId: number | null;
 }) {
   const [analytics, setAnalytics] = useState<MapAnalyticsDTO[]>([]);
   const [availableYears, setAvailableYears] = useState<number[]>([]);
@@ -114,14 +110,40 @@ export function ElectoralMapContainer({
       return;
     }
 
-    const encodedValue = encodeWhereValue(geoId);
-    fetch(`/api/arcgis/seccion?returnGeometry=true&where=MUNICIPIO=${encodedValue}`)
-      .then((r) => r.json())
+    const url = buildSectionOverlayUrl({
+      versionId: cartografiaVersionId,
+      municipio: geoId,
+    });
+    if (!url) return;
+
+    const controller = new AbortController();
+    setOverlayData((current) => {
+      if (!current.seccion) return current;
+      const next = { ...current };
+      delete next.seccion;
+      return next;
+    });
+
+    fetch(url, { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(await response.text());
+        return response.json() as Promise<MapFeatureCollection>;
+      })
       .then((data: MapFeatureCollection) =>
         setOverlayData((d) => ({ ...d, seccion: data }))
       )
-      .catch(console.error);
-  }, [selectedMunicipio, activeOverlays]);
+      .catch((fetchError) => {
+        if (controller.signal.aborted) return;
+        console.error("Error cargando secciones versionadas:", fetchError);
+        setActiveOverlays((current) => {
+          const next = new Set(current);
+          next.delete("seccion");
+          return next;
+        });
+      });
+
+    return () => controller.abort();
+  }, [selectedMunicipio, activeOverlays, cartografiaVersionId]);
 
   useEffect(() => {
     const id = selectedMunicipio?.municipioId ?? null;
@@ -217,12 +239,11 @@ export function ElectoralMapContainer({
       // seccion is lazy — only load if a municipio is selected
       if (key === "seccion" && !selectedMunicipio?.geoId) return;
 
-      let url = `/api/arcgis/${key}?returnGeometry=true`;
-      if (key === "seccion") {
-        const selectedValue = selectedMunicipio?.geoId;
-        if (selectedValue == null) return;
-        url += `&where=MUNICIPIO=${encodeWhereValue(selectedValue)}`;
-      }
+      // The section effect owns this request so municipality/version changes
+      // cannot race a second request started by the toggle.
+      if (key === "seccion") return;
+
+      const url = `/api/arcgis/${key}?returnGeometry=true`;
 
       try {
         const res = await fetch(url);
@@ -431,6 +452,7 @@ export function ElectoralMapContainer({
           onMunicipioSelect={setSelectedMunicipio}
           onVerSecciones={handleVerSecciones}
           coberturaMap={coberturaMap}
+          cartografiaVersionId={cartografiaVersionId}
         />
 
         {isAnalytic && (

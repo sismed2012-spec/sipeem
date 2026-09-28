@@ -1,4 +1,8 @@
-import type { CartografiaVersion } from "./cartografia-versionada";
+import {
+  listCartografiaVersions,
+  type CartografiaRpcInvoker,
+  type CartografiaVersion,
+} from "./cartografia-versionada";
 
 const EDOMEX_BBOX = {
   minLon: -100.75,
@@ -68,6 +72,31 @@ export function buildVersionedSectionsUrl(input: {
   });
 
   return `/api/cartografia/secciones?${params.toString()}`;
+}
+
+export function buildSectionOverlayUrl(input: {
+  versionId: number | null;
+  municipio: string | number | null;
+}): string | null {
+  const municipio = normalizeMunicipioClave(input.municipio);
+  if (!municipio) return null;
+
+  const versionId = input.versionId;
+  if (versionId !== null && Number.isSafeInteger(versionId) && versionId > 0) {
+    return buildVersionedSectionsUrl({
+      versionId,
+      municipio,
+    });
+  }
+
+  return `/api/arcgis/seccion?returnGeometry=true&where=MUNICIPIO=${Number(municipio)}`;
+}
+
+export async function loadInitialCartografiaVersionId(
+  invoke: CartografiaRpcInvoker
+): Promise<number | null> {
+  const versions = await listCartografiaVersions(invoke);
+  return selectInitialCartografiaVersion(versions)?.id ?? null;
 }
 
 export function clearSectionOverlay<T extends Record<string, unknown>>(
