@@ -1,5 +1,7 @@
 "use client";
 
+import type { ReactNode } from "react";
+
 import { cn } from "@/lib/utils";
 
 export type OverlayKey =
@@ -28,6 +30,7 @@ interface Props {
   hasMunicipioSelected: boolean;
   sectionAvailable?: boolean;
   coberturaMap?: Record<number, { compromisos: number; meta: number }>;
+  indicatorControls?: ReactNode;
   className?: string;
 }
 
@@ -37,6 +40,7 @@ export function LayerPanel({
   hasMunicipioSelected,
   sectionAvailable = true,
   coberturaMap = {},
+  indicatorControls,
   className,
 }: Props) {
   const hasCoberturaData = Object.keys(coberturaMap).length > 0;
@@ -58,6 +62,8 @@ export function LayerPanel({
         <span className="text-slate-200 text-[11px]">Municipio</span>
         <span className="text-slate-600 text-[9px] ml-auto">base</span>
       </div>
+
+      {indicatorControls}
 
       {OVERLAY_LAYERS.map((layer) => {
         const active = activeOverlays.has(layer.key);

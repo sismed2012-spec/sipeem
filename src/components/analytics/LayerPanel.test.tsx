@@ -18,4 +18,20 @@ describe("LayerPanel", () => {
     assert.match(html, /title="Cartografía versionada no disponible"/);
     assert.match(html, /disabled=""/);
   });
+
+  it("keeps the commitment legend and mounts thematic controls separately", () => {
+    const html = renderToStaticMarkup(
+      <LayerPanel
+        activeOverlays={new Set(["seccion"])}
+        onToggle={() => undefined}
+        hasMunicipioSelected
+        indicatorControls={<div>Controles de indicador</div>}
+      />
+    );
+
+    assert.match(html, /Controles de indicador/);
+    assert.match(html, /Cobertura/);
+    assert.match(html, /100% Completado/);
+    assert.match(html, /0–33% Crítico/);
+  });
 });
