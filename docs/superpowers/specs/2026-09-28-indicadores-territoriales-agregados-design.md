@@ -1,7 +1,7 @@
 # Indicadores territoriales agregados — Diseño
 
 **Fecha:** 2026-09-28
-**Estado:** aprobado en conversación; pendiente de revisión del documento
+**Estado:** especificación escrita aprobada
 **Alcance:** SIPEEM-DEV, API de lectura y mapa analítico
 
 ## 1. Propósito
@@ -156,8 +156,8 @@ Cada fila incluirá:
 - `secciones_total`;
 - `secciones_nominal`;
 - `secciones_demografia`;
-- `cobertura_nominal_pct`;
-- `cobertura_demografia_pct`;
+- `cobertura_fuente_nominal_pct`;
+- `cobertura_fuente_demografia_pct`;
 - `calidad_metricas jsonb`, con el número de secciones que aportaron valor a
   cada métrica demográfica nullable.
 
@@ -171,10 +171,12 @@ Se devolverán como columnas numéricas:
 - padrón de hombres, mujeres, no binario y total;
 - lista nominal de hombres, mujeres, no binario y total;
 - diferencia entre padrón y lista nominal;
-- cobertura nominal porcentual, calculada como
+- cobertura padrón-lista porcentual (`cobertura_padron_pct`), calculada como
   `sum(lista_total) * 100 / sum(padron_total)`.
 
-La cobertura nominal será cero únicamente cuando el padrón agregado sea cero.
+La cobertura padrón-lista será cero únicamente cuando el padrón agregado sea
+cero. Este indicador no es el mismo que la cobertura de secciones con fuente
+nominal.
 
 ### 7.5 Métricas demográficas
 
@@ -250,7 +252,7 @@ type TerritorialLevel =
 type TerritorialMetricKey =
   | "padronTotal"
   | "listaNominalTotal"
-  | "coberturaNominalPct"
+  | "coberturaPadronPct"
   | "poblacionTotal"
   | "pea"
   | "poblacionOcupada"
@@ -302,7 +304,7 @@ Los popups conservarán su contenido actual y añadirán un bloque temático con
 
 - nombre y valor del indicador;
 - procedencia;
-- cobertura nominal y demográfica;
+- cobertura de las fuentes nominal y demográfica;
 - número de secciones cubiertas sobre el total.
 
 Al volver a `Mapa político` se eliminan los colores y la leyenda temática, y se
