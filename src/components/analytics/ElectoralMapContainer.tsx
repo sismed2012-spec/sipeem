@@ -505,6 +505,9 @@ export function ElectoralMapContainer({
     return {
       level: territorialLevel,
       metricKey: territorialMetricKey,
+      versionId: territorialResponse.versionId,
+      nominalSource: territorialResponse.nominalSource,
+      demographicSource: territorialResponse.demographicSource,
       index: buildTerritorialIndicatorIndex(territorialResponse.rows),
       scale: buildQuantileScale(
         territorialResponse.rows.map(

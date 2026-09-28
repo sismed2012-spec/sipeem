@@ -1,6 +1,7 @@
 import {
   TERRITORIAL_METRICS,
   type TerritorialIndicatorRow,
+  type TerritorialIndicatorsResponse,
   type TerritorialLevel,
   type TerritorialMetricKey,
 } from "./territorial-indicators-types";
@@ -33,6 +34,9 @@ export interface QuantileScale {
 export interface TerritorialThemePresentation {
   level: TerritorialLevel;
   metricKey: TerritorialMetricKey;
+  versionId: number;
+  nominalSource: TerritorialIndicatorsResponse["nominalSource"];
+  demographicSource: TerritorialIndicatorsResponse["demographicSource"];
   index: TerritorialIndicatorIndex;
   scale: QuantileScale;
 }
