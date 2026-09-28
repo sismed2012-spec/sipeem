@@ -13,6 +13,7 @@
 # testing
 /coverage
 /.artifacts/demografia/
+/.artifacts/lista-nominal/
 
 # next.js
 /.next/
