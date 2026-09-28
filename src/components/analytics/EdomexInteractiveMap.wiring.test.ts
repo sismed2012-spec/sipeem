@@ -27,7 +27,12 @@ describe("EdomexInteractiveMap territorial theme wiring", () => {
     assert.match(source, /orderedOverlayEntries\.map/);
     assert.match(source, /if \(isDraggingRef\.current\) return/);
     assert.match(source, /event\.stopPropagation\(\)/);
-    assert.match(source, /setSelectedTerritory\(territoryRow\)/);
+    assert.match(source, /setSelectedTerritory\(\{/);
+    assert.match(source, /row: territoryRow/);
+    assert.match(
+      source,
+      /selectedTerritory\.versionId === territorialTheme\.versionId/,
+    );
     assert.match(source, /className="cursor-pointer hover:brightness-90"/);
     assert.match(source, /"pointer-events-none"/);
     assert.match(source, /<TerritorialIndicatorPopup/);

@@ -23,7 +23,10 @@ import {
   resolveTerritoryIndicator,
   type TerritorialThemePresentation,
 } from "@/lib/territorial-indicators-map";
-import type { TerritorialIndicatorRow } from "@/lib/territorial-indicators-types";
+import type {
+  TerritorialIndicatorRow,
+  TerritorialLevel,
+} from "@/lib/territorial-indicators-types";
 import { TerritorialIndicatorPopup } from "./TerritorialIndicatorPopup";
 
 type FeatureProperties = Record<string, string | number | null | undefined>;
@@ -168,8 +171,11 @@ export function EdomexInteractiveMap({
       data: ArcGISSeccionProps;
       versionId: number | null;
     } | null>(null);
-  const [selectedTerritory, setSelectedTerritory] =
-    useState<TerritorialIndicatorRow | null>(null);
+  const [selectedTerritory, setSelectedTerritory] = useState<{
+    row: TerritorialIndicatorRow;
+    level: TerritorialLevel;
+    versionId: number;
+  } | null>(null);
   const [mapTransform, setMapTransform] = useState(DEFAULT_VIEW);
 
   const svgRef = useRef<SVGSVGElement>(null);
@@ -183,19 +189,9 @@ export function EdomexInteractiveMap({
   } | null>(null);
   const isDraggingRef = useRef(false);
   const transformRef = useRef(mapTransform);
-  const territorialThemeEnabled = territorialTheme !== null;
-
   useEffect(() => {
     transformRef.current = mapTransform;
   }, [mapTransform]);
-
-  useEffect(() => {
-    setSelectedTerritory(null);
-  }, [
-    territorialTheme?.level,
-    territorialTheme?.versionId,
-    territorialThemeEnabled,
-  ]);
 
   useEffect(() => {
     const el = svgRef.current;
@@ -595,7 +591,11 @@ export function EdomexInteractiveMap({
                           if (!isThematicDistrict || !territoryRow) return;
                           if (isDraggingRef.current) return;
                           event.stopPropagation();
-                          setSelectedTerritory(territoryRow);
+                          setSelectedTerritory({
+                            row: territoryRow,
+                            level: territorialTheme.level,
+                            versionId: territorialTheme.versionId,
+                          });
                         }}
                       />
                     );
@@ -733,9 +733,12 @@ export function EdomexInteractiveMap({
         />
       )}
 
-      {selectedTerritory && territorialTheme ? (
+      {selectedTerritory &&
+      territorialTheme &&
+      selectedTerritory.level === territorialTheme.level &&
+      selectedTerritory.versionId === territorialTheme.versionId ? (
         <TerritorialIndicatorPopup
-          row={selectedTerritory}
+          row={selectedTerritory.row}
           metricKey={territorialTheme.metricKey}
           nominalSource={territorialTheme.nominalSource}
           demographicSource={territorialTheme.demographicSource}
