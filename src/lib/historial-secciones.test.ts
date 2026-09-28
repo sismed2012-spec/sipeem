@@ -39,6 +39,7 @@ function run() {
 
   assert.deepEqual(invalidErrors, [
     "La suma de fuerzas (135) no coincide con NUM_VOTOS_VALIDOS (150)",
+    "TOTAL_VOTOS (156) no coincide con validos + no registrados + nulos (155)",
   ]);
 
   const validErrors = validateSeccionTotals(
