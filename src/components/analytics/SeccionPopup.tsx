@@ -5,7 +5,10 @@ import { X, Loader2, GripHorizontal } from "lucide-react";
 import type { SeccionDetalle } from "@/actions/estructura";
 import { createDemografiaRequestCoordinator } from "@/lib/demografia-client";
 import type { DemografiaSeccionResponse } from "@/lib/demografia-types";
+import { createListaNominalRequestCoordinator } from "@/lib/lista-nominal-client";
+import type { ListaNominalSeccionResponse } from "@/lib/lista-nominal-types";
 import { DemografiaSeccionCard } from "./DemografiaSeccionCard";
+import { ListaNominalSeccionCard } from "./ListaNominalSeccionCard";
 
 type PopupBox = {
   left: number;
@@ -44,8 +47,15 @@ export function SeccionPopup({ seccion, cartografiaVersionId, onClose }: Props) 
   const [demografia, setDemografia] = useState<DemografiaSeccionResponse | null>(null);
   const [demografiaLoading, setDemografiaLoading] = useState(false);
   const [demografiaError, setDemografiaError] = useState(false);
+  const [listaNominal, setListaNominal] =
+    useState<ListaNominalSeccionResponse | null>(null);
+  const [listaNominalLoading, setListaNominalLoading] = useState(false);
+  const [listaNominalError, setListaNominalError] = useState(false);
   const demografiaCoordinatorRef = useRef<ReturnType<
     typeof createDemografiaRequestCoordinator
+  > | null>(null);
+  const listaNominalCoordinatorRef = useRef<ReturnType<
+    typeof createListaNominalRequestCoordinator
   > | null>(null);
 
   if (demografiaCoordinatorRef.current === null) {
@@ -69,6 +79,31 @@ export function SeccionPopup({ seccion, cartografiaVersionId, onClose }: Props) 
       () => {
         setDemografiaError(true);
         setDemografiaLoading(false);
+      }
+    );
+  }
+
+  if (listaNominalCoordinatorRef.current === null) {
+    listaNominalCoordinatorRef.current = createListaNominalRequestCoordinator(
+      async (_key, signal, input) => {
+        const query = new URLSearchParams({
+          versionId: String(input.versionId),
+        });
+        if (input.cutoffDate) query.set("cutoffDate", input.cutoffDate);
+        const response = await fetch(
+          `/api/lista-nominal/secciones/${input.sectionId}?${query.toString()}`,
+          { signal, cache: "no-store" }
+        );
+        if (!response.ok) throw new Error("Lista nominal no disponible");
+        return response.json() as Promise<ListaNominalSeccionResponse>;
+      },
+      (value) => {
+        setListaNominal(value);
+        if (value) setListaNominalLoading(false);
+      },
+      () => {
+        setListaNominalError(true);
+        setListaNominalLoading(false);
       }
     );
   }
@@ -228,6 +263,27 @@ export function SeccionPopup({ seccion, cartografiaVersionId, onClose }: Props) 
     return () => coordinator.clear();
   }, [cartografiaVersionId, seccion.seccionId]);
 
+  useEffect(() => {
+    const sectionId = seccion.seccionId;
+    const coordinator = listaNominalCoordinatorRef.current;
+    if (!coordinator || sectionId === null) {
+      coordinator?.clear();
+      setListaNominal(null);
+      setListaNominalError(false);
+      setListaNominalLoading(false);
+      return;
+    }
+
+    setListaNominalError(false);
+    setListaNominalLoading(true);
+    void coordinator.select({
+      sectionId,
+      versionId: cartografiaVersionId,
+      cutoffDate: null,
+    });
+    return () => coordinator.clear();
+  }, [cartografiaVersionId, seccion.seccionId]);
+
   const daysSince =
     detalle?.ultimo_evento
       ? Math.floor(
@@ -236,7 +292,10 @@ export function SeccionPopup({ seccion, cartografiaVersionId, onClose }: Props) 
       : null;
 
   const effectiveTipo = detalle?.tipo ?? seccion.tipo ?? "-";
-  const effectiveListaNominal = detalle?.lista_nominal ?? null;
+  const effectiveListaNominal =
+    listaNominal?.status === "AVAILABLE"
+      ? (listaNominal.nominal?.total ?? detalle?.lista_nominal ?? null)
+      : (detalle?.lista_nominal ?? null);
 
   const layoutClass = customBox
     ? "relative z-30 flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl pointer-events-auto 2xl:rounded-xl"
@@ -304,6 +363,25 @@ export function SeccionPopup({ seccion, cartografiaVersionId, onClose }: Props) 
             <StatCell label="Dto. local" value={seccion.dto_local ?? "-"} />
             <StatCell label="Control" value={seccion.control ?? "-"} />
           </div>
+        </div>
+
+        <div>
+          {listaNominalLoading && (
+            <div
+              className="flex items-center justify-center py-3"
+              aria-label="Cargando lista nominal"
+            >
+              <Loader2 className="h-4 w-4 animate-spin text-violet-600" />
+            </div>
+          )}
+          {!listaNominalLoading && listaNominalError && (
+            <p className="py-2 text-center text-[10px] text-slate-400">
+              No se pudo consultar la lista nominal
+            </p>
+          )}
+          {!listaNominalLoading && !listaNominalError && listaNominal && (
+            <ListaNominalSeccionCard data={listaNominal} />
+          )}
         </div>
 
         <div>
