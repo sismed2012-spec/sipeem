@@ -9,6 +9,8 @@
     "lint": "eslint",
     "demografia:preflight": "node scripts/demografia/profile.mjs",
     "demografia:import": "node scripts/import-inegi-demografia.mjs",
+    "lista-nominal:preflight": "node scripts/lista-nominal/profile.mjs",
+    "lista-nominal:import": "node scripts/import-ine-lista-nominal.mjs",
     "demografia:eceg:preflight": "node --max-old-space-size=6144 scripts/demografia/eceg-profile.mjs",
     "demografia:eceg:import": "node --max-old-space-size=6144 scripts/import-inegi-eceg.mjs",
     "demografia:eceg:publish": "node scripts/publish-inegi-eceg.mjs",
