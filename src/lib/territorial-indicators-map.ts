@@ -100,7 +100,7 @@ export function resolveTerritoryIndicator(
       ? "cartografia_distrito_local_id"
       : "cartografia_distrito_federal_id";
   const keyFields = level === "MUNICIPIO"
-    ? ["CVE_MUN", "CVEGEO"]
+    ? ["CVE_MUN", "CVEGEO", "MUNICIPIO"]
     : level === "DISTRITO_LOCAL"
       ? ["DISTRITO_L", "CVE_DTO_LOC", "DTO_LOC", "DISTRITO"]
       : ["DISTRITO_F", "CVE_DTO_FED", "DTO_FED", "DISTRITO"];

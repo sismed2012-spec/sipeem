@@ -91,7 +91,7 @@ function row(
 }
 
 describe("territorial geometry identity", () => {
-  it("indexes and resolves municipalities by versioned ID, CVE_MUN or CVEGEO", () => {
+  it("indexes and resolves municipalities by versioned ID or supported ArcGIS keys", () => {
     const target = row("MUNICIPIO", 1, 101, "001");
     const index = buildTerritorialIndicatorIndex([target]);
     assert.equal(index.byCartographyId.get(101), target);
@@ -100,6 +100,7 @@ describe("territorial geometry identity", () => {
       { cartografia_municipio_id: 101 },
       { CVE_MUN: "1" },
       { CVEGEO: "15001" },
+      { MUNICIPIO: 1 },
     ]) {
       assert.equal(resolveTerritoryIndicator("MUNICIPIO", properties, index), target);
     }
