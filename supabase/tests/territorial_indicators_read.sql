@@ -373,6 +373,16 @@ begin
   v_failed := false;
   begin
     perform * from public.rpc_indicadores_territoriales(
+      null, v_version_id, v_nominal_cut_id, v_demography_source_id
+    );
+  exception when invalid_parameter_value then
+    v_failed := true;
+  end;
+  if not v_failed then raise exception 'null level was accepted'; end if;
+
+  v_failed := false;
+  begin
+    perform * from public.rpc_indicadores_territoriales(
       'MUNICIPIO', 9223372036854775807, v_nominal_cut_id, v_demography_source_id
     );
   exception when no_data_found then

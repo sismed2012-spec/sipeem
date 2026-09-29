@@ -16,8 +16,8 @@ const row = {
   demographicSections: 1,
   nominalSourceCoveragePercent: 50,
   demographicSourceCoveragePercent: 50,
-  metricQuality: {},
-  metrics: { pea: 0, poblacionConDiscapacidad: null },
+  metricQuality: { pea: 1, poblacionConDiscapacidad: 0 },
+  metrics: { pea: 0, poblacionConDiscapacidad: null, padronTotal: 100 },
 } as unknown as TerritorialIndicatorRow;
 
 it("shows value, provenance and section coverage while preserving zero and null", () => {
@@ -35,6 +35,9 @@ it("shows value, provenance and section coverage while preserving zero and null"
   assert.match(zeroHtml, /Censo 2020/);
   assert.match(zeroHtml, /Nominal: 1 \/ 2 secciones/);
   assert.match(zeroHtml, /Demografía: 1 \/ 2 secciones/);
+  assert.match(zeroHtml, /Indicador: 1 \/ 2 secciones/);
+  assert.match(zeroHtml, /text-slate-900/);
+  assert.match(zeroHtml, /text-slate-600/);
 
   const nullHtml = renderToStaticMarkup(
     <TerritorialIndicatorSummary
@@ -43,4 +46,10 @@ it("shows value, provenance and section coverage while preserving zero and null"
     />,
   );
   assert.match(nullHtml, /Sin dato/);
+  assert.match(nullHtml, /Indicador: 0 \/ 2 secciones/);
+
+  const nominalHtml = renderToStaticMarkup(
+    <TerritorialIndicatorSummary {...common} metricKey="padronTotal" />,
+  );
+  assert.doesNotMatch(nominalHtml, /Indicador:/);
 });

@@ -6,8 +6,10 @@ import type {
   TerritorialIndicatorsResponse,
 } from "./territorial-indicators-types";
 import {
+  buildEffectiveTerritorialOverlays,
   buildTerritorialIndicatorsUrl,
   createTerritorialIndicatorsRequestCoordinator,
+  getRequiredTerritorialOverlay,
   territorialIndicatorsSelectionKey,
 } from "./territorial-indicators-client";
 
@@ -25,6 +27,22 @@ function response(
 }
 
 describe("territorial indicator request coordinator", () => {
+  it("adds district overlays only while their territorial theme requires them", () => {
+    const userOverlays = new Set(["entidad" as const]);
+    const required = getRequiredTerritorialOverlay("INDICATOR", "DISTRITO_FEDERAL");
+    assert.equal(required, "distrito_federal");
+    assert.deepEqual(
+      [...buildEffectiveTerritorialOverlays(userOverlays, required)].sort(),
+      ["distrito_federal", "entidad"],
+    );
+    assert.deepEqual(
+      [...buildEffectiveTerritorialOverlays(userOverlays, null)],
+      ["entidad"],
+    );
+    assert.equal(getRequiredTerritorialOverlay("POLITICAL", "DISTRITO_FEDERAL"), null);
+    assert.equal(getRequiredTerritorialOverlay("INDICATOR", "MUNICIPIO"), null);
+  });
+
   it("builds an allowlisted URL and stable selection key", () => {
     const input = {
       level: "DISTRITO_LOCAL" as const,

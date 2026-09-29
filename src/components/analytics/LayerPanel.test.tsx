@@ -34,4 +34,18 @@ describe("LayerPanel", () => {
     assert.match(html, /100% Completado/);
     assert.match(html, /0–33% Crítico/);
   });
+
+  it("locks a district overlay required by the active territorial theme", () => {
+    const html = renderToStaticMarkup(
+      <LayerPanel
+        activeOverlays={new Set(["distrito_federal"])}
+        requiredOverlay="distrito_federal"
+        onToggle={() => undefined}
+        hasMunicipioSelected={false}
+      />
+    );
+
+    assert.match(html, /title="Requerida por el indicador territorial"/);
+    assert.match(html, /disabled=""/);
+  });
 });

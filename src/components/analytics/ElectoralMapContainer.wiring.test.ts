@@ -39,9 +39,19 @@ describe("ElectoralMapContainer cartography wiring", () => {
     assert.match(source, /const thematicPresentation = useMemo/);
     assert.match(source, /thematicError \|\| !territorialResponse/);
     assert.match(source, /setTerritorialRetryKey\(\(current\) => current \+ 1\)/);
+    assert.match(
+      source,
+      /setTerritorialSelectionEpoch\(\(current\) => current \+ 1\)/,
+    );
+    assert.match(source, /selectionEpoch: territorialSelectionEpoch/);
     assert.match(source, /thematicPresentation \? \(/);
     assert.match(source, /<TerritorialIndicatorLegend/);
     assert.match(source, /: \([\s\S]*?<MapLegend/);
+    assert.match(
+      source,
+      /const hasVisibleLegend = isAnalytic \|\| thematicPresentation !== null/,
+    );
+    assert.match(source, /\{hasVisibleLegend && \(/);
     assert.equal((source.match(/indicatorControls=\{indicatorControls\}/g) ?? []).length, 2);
     assert.match(source, /territorialTheme=\{thematicPresentation\}/);
     assert.match(source, /coberturaMap=\{coberturaMap\}/);

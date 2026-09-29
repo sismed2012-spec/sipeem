@@ -32,10 +32,10 @@ export async function runAuthenticatedTerritorialIndicatorsRequest<T>({
   execute,
   onError = console.error,
 }: AuthenticatedTerritorialIndicatorsRequestOptions<T>): Promise<Response> {
-  const user = await authenticate();
-  if (!user) return privateJson({ error: "No autenticado" }, 401);
-
   try {
+    const user = await authenticate();
+    if (!user) return privateJson({ error: "No autenticado" }, 401);
+
     return privateJson(await execute(createInvoker()));
   } catch (error) {
     if (error instanceof TerritorialIndicatorsInputError) {

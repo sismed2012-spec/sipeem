@@ -16,6 +16,7 @@ const district = {
   demographicSections: 15,
   nominalSourceCoveragePercent: 90,
   demographicSourceCoveragePercent: 75,
+  metricQuality: { poblacionTotal: 15 },
   metrics: { poblacionTotal: 123456 },
 } as unknown as TerritorialIndicatorRow;
 
@@ -37,4 +38,5 @@ it("shows district identity, indicator, provenance and both coverages", () => {
   assert.match(html, /Censo 2020/);
   assert.match(html, /Nominal: 18 \/ 20 secciones/);
   assert.match(html, /Demografía: 15 \/ 20 secciones/);
+  assert.match(html, /Indicador: 15 \/ 20 secciones/);
 });

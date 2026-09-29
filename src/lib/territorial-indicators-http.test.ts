@@ -32,6 +32,31 @@ describe("runAuthenticatedTerritorialIndicatorsRequest", () => {
     assert.equal(response.headers.get("cache-control"), "private, no-store");
   });
 
+  it("contains authentication failures without initializing the privileged client", async () => {
+    let initialized = false;
+    let reported = "";
+    const response = await runAuthenticatedTerritorialIndicatorsRequest({
+      authenticate: async () => {
+        throw new Error("auth provider secret");
+      },
+      createInvoker: () => {
+        initialized = true;
+        return unusedInvoker;
+      },
+      execute: async () => ({ ok: true }),
+      onError: (error) => {
+        reported = error.message;
+      },
+    });
+    assert.equal(response.status, 500);
+    assert.equal(initialized, false);
+    assert.equal(reported, "auth provider secret");
+    assert.deepEqual(await response.json(), {
+      error: "Error interno al consultar indicadores territoriales",
+    });
+    assert.equal(response.headers.get("cache-control"), "private, no-store");
+  });
+
   it("maps validation, gateway and unknown failures without leaking internals", async () => {
     const cases = [
       [new TerritorialIndicatorsInputError("level inválido"), 400, "level inválido"],

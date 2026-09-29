@@ -175,6 +175,7 @@ export function EdomexInteractiveMap({
     row: TerritorialIndicatorRow;
     level: TerritorialLevel;
     versionId: number;
+    selectionEpoch: number;
   } | null>(null);
   const [mapTransform, setMapTransform] = useState(DEFAULT_VIEW);
 
@@ -572,6 +573,17 @@ export function EdomexInteractiveMap({
                           territorialTheme.metricKey
                         )}`
                       : undefined;
+                    const selectTerritory = () => {
+                      if (!isThematicDistrict || !territoryRow || !territorialTheme) {
+                        return;
+                      }
+                      setSelectedTerritory({
+                        row: territoryRow,
+                        level: territorialTheme.level,
+                        versionId: territorialTheme.versionId,
+                        selectionEpoch: territorialTheme.selectionEpoch,
+                      });
+                    };
 
                     return (
                       <path
@@ -582,6 +594,8 @@ export function EdomexInteractiveMap({
                         strokeWidth={isThematicDistrict ? "1" : "0.7"}
                         strokeDasharray={isThematicDistrict ? undefined : "3 2"}
                         aria-label={territorialLabel}
+                        role={isThematicDistrict && territoryRow ? "button" : undefined}
+                        tabIndex={isThematicDistrict && territoryRow ? 0 : undefined}
                         className={
                           isThematicDistrict
                             ? "cursor-pointer hover:brightness-90"
@@ -591,11 +605,13 @@ export function EdomexInteractiveMap({
                           if (!isThematicDistrict || !territoryRow) return;
                           if (isDraggingRef.current) return;
                           event.stopPropagation();
-                          setSelectedTerritory({
-                            row: territoryRow,
-                            level: territorialTheme.level,
-                            versionId: territorialTheme.versionId,
-                          });
+                          selectTerritory();
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key !== "Enter" && event.key !== " ") return;
+                          event.preventDefault();
+                          event.stopPropagation();
+                          selectTerritory();
                         }}
                       />
                     );
@@ -736,7 +752,8 @@ export function EdomexInteractiveMap({
       {selectedTerritory &&
       territorialTheme &&
       selectedTerritory.level === territorialTheme.level &&
-      selectedTerritory.versionId === territorialTheme.versionId ? (
+      selectedTerritory.versionId === territorialTheme.versionId &&
+      selectedTerritory.selectionEpoch === territorialTheme.selectionEpoch ? (
         <TerritorialIndicatorPopup
           row={selectedTerritory.row}
           metricKey={territorialTheme.metricKey}

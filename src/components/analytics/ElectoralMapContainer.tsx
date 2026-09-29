@@ -44,8 +44,10 @@ import {
 } from "@/lib/cartografia-map";
 import type { CartografiaVersion } from "@/lib/cartografia-versionada";
 import {
+  buildEffectiveTerritorialOverlays,
   buildTerritorialIndicatorsUrl,
   createTerritorialIndicatorsRequestCoordinator,
+  getRequiredTerritorialOverlay,
 } from "@/lib/territorial-indicators-client";
 import {
   buildQuantileScale,
@@ -121,6 +123,7 @@ export function ElectoralMapContainer({
   const [territorialLoading, setTerritorialLoading] = useState(false);
   const [thematicError, setThematicError] = useState<string | null>(null);
   const [territorialRetryKey, setTerritorialRetryKey] = useState(0);
+  const [territorialSelectionEpoch, setTerritorialSelectionEpoch] = useState(0);
   const overlayCacheRef = useRef<OverlayDataMap>({});
   const overlayRequestsRef = useRef<
     Partial<Record<OverlayKey, Promise<MapFeatureCollection>>>
@@ -128,6 +131,22 @@ export function ElectoralMapContainer({
   const territorialCoordinatorRef = useRef<
     ReturnType<typeof createTerritorialIndicatorsRequestCoordinator> | null
   >(null);
+  const requiredThematicOverlay = getRequiredTerritorialOverlay(
+    territorialMode,
+    territorialLevel,
+  );
+  const effectiveActiveOverlays = useMemo(
+    () => buildEffectiveTerritorialOverlays(activeOverlays, requiredThematicOverlay),
+    [activeOverlays, requiredThematicOverlay],
+  );
+  const visibleOverlayData = useMemo(
+    () => Object.fromEntries(
+      Object.entries(overlayData).filter(([key]) =>
+        effectiveActiveOverlays.has(key as OverlayKey)
+      ),
+    ),
+    [effectiveActiveOverlays, overlayData],
+  );
 
   if (territorialCoordinatorRef.current === null) {
     territorialCoordinatorRef.current =
@@ -145,6 +164,7 @@ export function ElectoralMapContainer({
         (value) => {
           setTerritorialResponse(value);
           if (value) {
+            setTerritorialSelectionEpoch((current) => current + 1);
             setTerritorialLoading(false);
             setThematicError(null);
           }
@@ -320,13 +340,6 @@ export function ElectoralMapContainer({
   const ensureOverlay = useCallback(async (key: OverlayKey) => {
     if (key === "seccion") return;
 
-    setActiveOverlays((current) => {
-      if (current.has(key)) return current;
-      const next = new Set(current);
-      next.add(key);
-      return next;
-    });
-
     const cached = overlayCacheRef.current[key];
     if (cached) {
       setOverlayData((current) => ({ ...current, [key]: cached }));
@@ -350,11 +363,6 @@ export function ElectoralMapContainer({
       setOverlayData((current) => ({ ...current, [key]: data }));
     } catch (overlayError) {
       console.error(`Error cargando overlay ${key}:`, overlayError);
-      setActiveOverlays((current) => {
-        const next = new Set(current);
-        next.delete(key);
-        return next;
-      });
       throw overlayError;
     } finally {
       delete overlayRequestsRef.current[key];
@@ -363,6 +371,7 @@ export function ElectoralMapContainer({
 
   const toggleOverlay = useCallback(
     async (key: OverlayKey) => {
+      if (key === requiredThematicOverlay) return;
       const isCurrentlyActive = activeOverlays.has(key);
 
       if (isCurrentlyActive) {
@@ -370,11 +379,6 @@ export function ElectoralMapContainer({
           const next = new Set(current);
           next.delete(key);
           return next;
-        });
-        setOverlayData((d) => {
-          const copy = { ...d };
-          delete copy[key];
-          return copy;
         });
         return;
       }
@@ -389,9 +393,16 @@ export function ElectoralMapContainer({
         return;
       }
 
-      await ensureOverlay(key).catch(() => undefined);
+      setActiveOverlays((current) => new Set(current).add(key));
+      await ensureOverlay(key).catch(() => {
+        setActiveOverlays((current) => {
+          const next = new Set(current);
+          next.delete(key);
+          return next;
+        });
+      });
     },
-    [activeOverlays, ensureOverlay, selectedMunicipio]
+    [activeOverlays, ensureOverlay, requiredThematicOverlay, selectedMunicipio]
   );
 
   const handleVerSecciones = useCallback(() => {
@@ -506,6 +517,7 @@ export function ElectoralMapContainer({
       level: territorialLevel,
       metricKey: territorialMetricKey,
       versionId: territorialResponse.versionId,
+      selectionEpoch: territorialSelectionEpoch,
       nominalSource: territorialResponse.nominalSource,
       demographicSource: territorialResponse.demographicSource,
       index: buildTerritorialIndicatorIndex(territorialResponse.rows),
@@ -521,6 +533,7 @@ export function ElectoralMapContainer({
     territorialMetricKey,
     territorialMode,
     territorialResponse,
+    territorialSelectionEpoch,
   ]);
 
   const indicatorControls = (
@@ -539,6 +552,7 @@ export function ElectoralMapContainer({
       onRetry={handleTerritorialRetry}
     />
   );
+  const hasVisibleLegend = isAnalytic || thematicPresentation !== null;
 
   if (error) {
     return (
@@ -715,7 +729,7 @@ export function ElectoralMapContainer({
               </Select>
             )}
 
-            {isAnalytic && (
+            {hasVisibleLegend && (
               <Button
                 variant="outline"
                 className="h-11 px-3"
@@ -740,7 +754,7 @@ export function ElectoralMapContainer({
       <main className="relative min-h-[68vh] flex-1 overflow-hidden bg-slate-100 shadow-inner 2xl:min-h-0">
         <EdomexInteractiveMap
           geoData={geoData}
-          overlayData={overlayData}
+          overlayData={visibleOverlayData}
           analytics={analytics}
           isAnalytic={isAnalytic}
           onMunicipioSelect={setSelectedMunicipio}
@@ -750,7 +764,7 @@ export function ElectoralMapContainer({
           territorialTheme={thematicPresentation}
         />
 
-        {isAnalytic && (
+        {hasVisibleLegend && (
           thematicPresentation ? (
             <div className="absolute left-4 top-4 z-20 hidden 2xl:block">
               <TerritorialIndicatorLegend
@@ -758,12 +772,12 @@ export function ElectoralMapContainer({
                 scale={thematicPresentation.scale}
               />
             </div>
-          ) : (
+          ) : isAnalytic ? (
             <MapLegend
               data={analytics}
               className="absolute left-4 top-4 z-20 hidden 2xl:block"
             />
-          )
+          ) : null
         )}
 
         <div className="absolute right-4 top-4 z-20 hidden w-72 flex-col gap-3 2xl:flex">
@@ -776,7 +790,8 @@ export function ElectoralMapContainer({
             onRetry={handleCartografiaRetry}
           />
           <LayerPanel
-            activeOverlays={activeOverlays}
+            activeOverlays={effectiveActiveOverlays}
+            requiredOverlay={requiredThematicOverlay}
             onToggle={toggleOverlay}
             hasMunicipioSelected={selectedMunicipio?.geoId != null}
             sectionAvailable={selectedCartografiaVersionId != null}
@@ -832,7 +847,8 @@ export function ElectoralMapContainer({
           </DialogHeader>
           <div className="px-4 pb-4">
             <LayerPanel
-              activeOverlays={activeOverlays}
+              activeOverlays={effectiveActiveOverlays}
+              requiredOverlay={requiredThematicOverlay}
               onToggle={toggleOverlay}
               hasMunicipioSelected={selectedMunicipio?.geoId != null}
               sectionAvailable={selectedCartografiaVersionId != null}

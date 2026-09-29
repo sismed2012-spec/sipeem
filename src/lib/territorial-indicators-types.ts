@@ -37,6 +37,41 @@ export type TerritorialDemographicMetricKey =
   | "viviendasConComputadora"
   | "viviendasConInternet";
 
+export type TerritorialSelectableDemographicMetricKey = Extract<
+  TerritorialMetricKey,
+  TerritorialDemographicMetricKey
+>;
+
+const TERRITORIAL_DEMOGRAPHIC_METRIC_KEYS = new Set<string>([
+  "poblacionTotal",
+  "poblacionFemenina",
+  "poblacionMasculina",
+  "poblacion0a14",
+  "poblacion15a64",
+  "poblacion65Mas",
+  "poblacion18Mas",
+  "pea",
+  "poblacionOcupada",
+  "poblacion15MasAnalfabeta",
+  "poblacionDerechohabienteSalud",
+  "poblacionConDiscapacidad",
+  "poblacion3MasHablanteLenguaIndigena",
+  "poblacionAfrodescendiente",
+  "viviendasHabitadas",
+  "viviendasConAgua",
+  "viviendasConDrenaje",
+  "viviendasConElectricidad",
+  "viviendasConCelular",
+  "viviendasConComputadora",
+  "viviendasConInternet",
+]);
+
+export function isTerritorialDemographicMetricKey(
+  key: TerritorialMetricKey,
+): key is TerritorialSelectableDemographicMetricKey {
+  return TERRITORIAL_DEMOGRAPHIC_METRIC_KEYS.has(key);
+}
+
 export interface TerritorialIndicatorMetrics {
   padronHombres: number | null;
   padronMujeres: number | null;

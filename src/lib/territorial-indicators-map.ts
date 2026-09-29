@@ -35,6 +35,7 @@ export interface TerritorialThemePresentation {
   level: TerritorialLevel;
   metricKey: TerritorialMetricKey;
   versionId: number;
+  selectionEpoch: number;
   nominalSource: TerritorialIndicatorsResponse["nominalSource"];
   demographicSource: TerritorialIndicatorsResponse["demographicSource"];
   index: TerritorialIndicatorIndex;

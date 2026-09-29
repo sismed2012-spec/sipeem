@@ -26,6 +26,7 @@ const OVERLAY_LAYERS: OverlayLayer[] = [
 
 interface Props {
   activeOverlays: Set<OverlayKey>;
+  requiredOverlay?: OverlayKey | null;
   onToggle: (key: OverlayKey) => void;
   hasMunicipioSelected: boolean;
   sectionAvailable?: boolean;
@@ -36,6 +37,7 @@ interface Props {
 
 export function LayerPanel({
   activeOverlays,
+  requiredOverlay = null,
   onToggle,
   hasMunicipioSelected,
   sectionAvailable = true,
@@ -67,13 +69,17 @@ export function LayerPanel({
 
       {OVERLAY_LAYERS.map((layer) => {
         const active = activeOverlays.has(layer.key);
-        const disabled =
+        const required = requiredOverlay === layer.key;
+        const disabled = required || (
           layer.lazy &&
           (!hasMunicipioSelected || !sectionAvailable) &&
-          !active;
-        const disabledTitle = !sectionAvailable
-          ? "Cartografía versionada no disponible"
-          : "Selecciona un municipio primero";
+          !active
+        );
+        const disabledTitle = required
+          ? "Requerida por el indicador territorial"
+          : !sectionAvailable
+            ? "Cartografía versionada no disponible"
+            : "Selecciona un municipio primero";
 
         return (
           <button

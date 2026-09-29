@@ -31,10 +31,14 @@ describe("EdomexInteractiveMap territorial theme wiring", () => {
     assert.match(source, /row: territoryRow/);
     assert.match(
       source,
-      /selectedTerritory\.versionId === territorialTheme\.versionId/,
+      /selectedTerritory\.selectionEpoch === territorialTheme\.selectionEpoch/,
     );
+    assert.match(source, /selectionEpoch: territorialTheme\.selectionEpoch/);
     assert.match(source, /className="cursor-pointer hover:brightness-90"/);
     assert.match(source, /"pointer-events-none"/);
+    assert.match(source, /role=\{isThematicDistrict && territoryRow \? "button" : undefined\}/);
+    assert.match(source, /tabIndex=\{isThematicDistrict && territoryRow \? 0 : undefined\}/);
+    assert.match(source, /event\.key !== "Enter" && event\.key !== " "/);
     assert.match(source, /<TerritorialIndicatorPopup/);
   });
 
