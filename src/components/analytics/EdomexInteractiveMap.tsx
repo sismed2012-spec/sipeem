@@ -17,6 +17,17 @@ import { SeccionPopup, type ArcGISSeccionProps } from "./SeccionPopup";
 import { resolvePopupContext } from "./map-popup-resolvers";
 import { isSectionSelectionCurrent } from "@/lib/cartografia-map";
 import { resolveDemografiaSectionId } from "@/lib/demografia-map";
+import {
+  formatTerritorialMetric,
+  getIndicatorFill,
+  resolveTerritoryIndicator,
+  type TerritorialThemePresentation,
+} from "@/lib/territorial-indicators-map";
+import type {
+  TerritorialIndicatorRow,
+  TerritorialLevel,
+} from "@/lib/territorial-indicators-types";
+import { TerritorialIndicatorPopup } from "./TerritorialIndicatorPopup";
 
 type FeatureProperties = Record<string, string | number | null | undefined>;
 type MapFeature = GeoJSON.Feature<GeoJSON.Geometry, GeoJSON.GeoJsonProperties>;
@@ -40,6 +51,7 @@ interface Props {
   onVerSecciones?: () => void;
   coberturaMap?: Record<number, { compromisos: number; meta: number }>;
   cartografiaVersionId?: number | null;
+  territorialTheme?: TerritorialThemePresentation | null;
 }
 
 interface HoveredMunicipio {
@@ -144,6 +156,7 @@ export function EdomexInteractiveMap({
   onVerSecciones,
   coberturaMap = {},
   cartografiaVersionId = null,
+  territorialTheme = null,
 }: Props) {
   const [hoveredMun, setHoveredMun] = useState<HoveredMunicipio | null>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
@@ -158,6 +171,12 @@ export function EdomexInteractiveMap({
       data: ArcGISSeccionProps;
       versionId: number | null;
     } | null>(null);
+  const [selectedTerritory, setSelectedTerritory] = useState<{
+    row: TerritorialIndicatorRow;
+    level: TerritorialLevel;
+    versionId: number;
+    selectionEpoch: number;
+  } | null>(null);
   const [mapTransform, setMapTransform] = useState(DEFAULT_VIEW);
 
   const svgRef = useRef<SVGSVGElement>(null);
@@ -171,7 +190,6 @@ export function EdomexInteractiveMap({
   } | null>(null);
   const isDraggingRef = useRef(false);
   const transformRef = useRef(mapTransform);
-
   useEffect(() => {
     transformRef.current = mapTransform;
   }, [mapTransform]);
@@ -330,6 +348,32 @@ export function EdomexInteractiveMap({
     [project]
   );
 
+  const orderedOverlayEntries = useMemo(() => {
+    const thematicOverlayKey = territorialTheme?.level === "DISTRITO_LOCAL"
+      ? "distrito_local"
+      : territorialTheme?.level === "DISTRITO_FEDERAL"
+        ? "distrito_federal"
+        : null;
+    const rank = (overlayKey: string) =>
+      overlayKey === thematicOverlayKey
+        ? 0
+        : overlayKey === "seccion" ? 2 : 1;
+    return Object.entries(overlayData).toSorted(
+      ([left], [right]) => rank(left) - rank(right)
+    );
+  }, [overlayData, territorialTheme?.level]);
+
+  const selectedMunicipioTerritorialRow = useMemo(() => {
+    if (territorialTheme?.level !== "MUNICIPIO" || !selectedMunicipio) {
+      return null;
+    }
+    return resolveTerritoryIndicator(
+      "MUNICIPIO",
+      selectedMunicipio.arcgis.properties,
+      territorialTheme.index
+    );
+  }, [selectedMunicipio, territorialTheme]);
+
   function handleCloseMunicipio() {
     setSelectedMunicipio(null);
     setSelectedSeccion(null);
@@ -375,8 +419,33 @@ export function EdomexInteractiveMap({
               const munNameRaw =
                 firstString(p.NOMGEO, p.NOM_MUN, p.NOMBRE, p.nombre) ?? "";
               const data = popupContext.analytics ?? undefined;
-              const fillColor =
+              const politicalFill =
                 isAnalytic && data ? data.partido_color ?? "#f1f5f9" : "#f1f5f9";
+              const territoryRow = territorialTheme?.level === "MUNICIPIO"
+                ? resolveTerritoryIndicator(
+                    "MUNICIPIO",
+                    p,
+                    territorialTheme.index
+                  )
+                : null;
+              const territoryValue = territoryRow && territorialTheme
+                ? territoryRow.metrics[territorialTheme.metricKey]
+                : null;
+              const fillColor = territorialTheme
+                ? territorialTheme.level === "MUNICIPIO"
+                  ? getIndicatorFill(territoryValue, territorialTheme.scale)
+                  : "#e2e8f0"
+                : politicalFill;
+              const territorialLabel = territorialTheme
+                ? `${munNameRaw}: ${
+                    territorialTheme.level === "MUNICIPIO"
+                      ? formatTerritorialMetric(
+                          territoryValue,
+                          territorialTheme.metricKey
+                        )
+                      : "Sin dato"
+                  }`
+                : undefined;
               const isHovered = hoveredMun?.geoId === geoId;
               const consistencyStroke =
                 data?.consistency_status === "inconsistente"
@@ -397,6 +466,7 @@ export function EdomexInteractiveMap({
                   key={`mun-${geoId ?? i}`}
                   d={featureToPath(feature)}
                   fill={fillColor}
+                  aria-label={territorialLabel}
                   stroke={baseStroke}
                   strokeWidth={isHovered ? "1.8" : baseStrokeWidth}
                   strokeDasharray={
@@ -412,6 +482,7 @@ export function EdomexInteractiveMap({
                   onClick={() => {
                     if (isDraggingRef.current) return;
 
+                    setSelectedTerritory(null);
                     setSelectedMunicipio({
                       arcgis: arcgisPropsToMunicipio(p),
                       electoralData: data ?? null,
@@ -428,7 +499,7 @@ export function EdomexInteractiveMap({
               );
             })}
 
-            {Object.entries(overlayData).map(([overlayKey, fc]) => {
+            {orderedOverlayEntries.map(([overlayKey, fc]) => {
               if (!fc?.features?.length) return null;
               const color = OVERLAY_COLORS[overlayKey] ?? "#64748b";
 
@@ -477,15 +548,71 @@ export function EdomexInteractiveMap({
                       );
                     }
 
+                    const properties = (feature.properties ?? {}) as FeatureProperties;
+                    const isThematicDistrict =
+                      (territorialTheme?.level === "DISTRITO_LOCAL" &&
+                        overlayKey === "distrito_local") ||
+                      (territorialTheme?.level === "DISTRITO_FEDERAL" &&
+                        overlayKey === "distrito_federal");
+                    const territoryRow = isThematicDistrict && territorialTheme
+                      ? resolveTerritoryIndicator(
+                          territorialTheme.level,
+                          properties,
+                          territorialTheme.index
+                        )
+                      : null;
+                    const territoryValue = territoryRow && territorialTheme
+                      ? territoryRow.metrics[territorialTheme.metricKey]
+                      : null;
+                    const thematicFill = territorialTheme
+                      ? getIndicatorFill(territoryValue, territorialTheme.scale)
+                      : "none";
+                    const territorialLabel = isThematicDistrict && territorialTheme
+                      ? `${territoryRow?.name ?? "Territorio"}: ${formatTerritorialMetric(
+                          territoryValue,
+                          territorialTheme.metricKey
+                        )}`
+                      : undefined;
+                    const selectTerritory = () => {
+                      if (!isThematicDistrict || !territoryRow || !territorialTheme) {
+                        return;
+                      }
+                      setSelectedTerritory({
+                        row: territoryRow,
+                        level: territorialTheme.level,
+                        versionId: territorialTheme.versionId,
+                        selectionEpoch: territorialTheme.selectionEpoch,
+                      });
+                    };
+
                     return (
                       <path
-                        key={`ov-${i}`}
+                        key={`ov-${overlayKey}-${feature.id ?? i}`}
                         d={featureToPath(feature)}
-                        fill="none"
+                        fill={isThematicDistrict ? thematicFill : "none"}
                         stroke={color}
-                        strokeWidth="0.7"
-                        strokeDasharray="3 2"
-                        className="pointer-events-none"
+                        strokeWidth={isThematicDistrict ? "1" : "0.7"}
+                        strokeDasharray={isThematicDistrict ? undefined : "3 2"}
+                        aria-label={territorialLabel}
+                        role={isThematicDistrict && territoryRow ? "button" : undefined}
+                        tabIndex={isThematicDistrict && territoryRow ? 0 : undefined}
+                        className={
+                          isThematicDistrict
+                            ? "cursor-pointer hover:brightness-90"
+                            : "pointer-events-none"
+                        }
+                        onClick={(event) => {
+                          if (!isThematicDistrict || !territoryRow) return;
+                          if (isDraggingRef.current) return;
+                          event.stopPropagation();
+                          selectTerritory();
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key !== "Enter" && event.key !== " ") return;
+                          event.preventDefault();
+                          event.stopPropagation();
+                          selectTerritory();
+                        }}
                       />
                     );
                   })}
@@ -609,8 +736,32 @@ export function EdomexInteractiveMap({
           municipioId={selectedMunicipio.municipioId}
           onClose={handleCloseMunicipio}
           onVerSecciones={() => onVerSecciones?.()}
+          territorialIndicator={
+            selectedMunicipioTerritorialRow && territorialTheme
+              ? {
+                  row: selectedMunicipioTerritorialRow,
+                  metricKey: territorialTheme.metricKey,
+                  nominalSource: territorialTheme.nominalSource,
+                  demographicSource: territorialTheme.demographicSource,
+                }
+              : null
+          }
         />
       )}
+
+      {selectedTerritory &&
+      territorialTheme &&
+      selectedTerritory.level === territorialTheme.level &&
+      selectedTerritory.versionId === territorialTheme.versionId &&
+      selectedTerritory.selectionEpoch === territorialTheme.selectionEpoch ? (
+        <TerritorialIndicatorPopup
+          row={selectedTerritory.row}
+          metricKey={territorialTheme.metricKey}
+          nominalSource={territorialTheme.nominalSource}
+          demographicSource={territorialTheme.demographicSource}
+          onClose={() => setSelectedTerritory(null)}
+        />
+      ) : null}
 
       {selectedSeccion &&
         isSectionSelectionCurrent(

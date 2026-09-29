@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   getHistorialMapAnalytics,
   getAvailableHistorialYears,
@@ -43,6 +43,27 @@ import {
   selectInitialCartografiaVersion,
 } from "@/lib/cartografia-map";
 import type { CartografiaVersion } from "@/lib/cartografia-versionada";
+import {
+  buildEffectiveTerritorialOverlays,
+  buildTerritorialIndicatorsUrl,
+  createTerritorialIndicatorsRequestCoordinator,
+  getRequiredTerritorialOverlay,
+} from "@/lib/territorial-indicators-client";
+import {
+  buildQuantileScale,
+  buildTerritorialIndicatorIndex,
+  type TerritorialThemePresentation,
+} from "@/lib/territorial-indicators-map";
+import type {
+  TerritorialIndicatorsResponse,
+  TerritorialLevel,
+  TerritorialMetricKey,
+} from "@/lib/territorial-indicators-types";
+import { TerritorialIndicatorLegend } from "./TerritorialIndicatorLegend";
+import {
+  TerritorialIndicatorPanel,
+  type TerritorialMapMode,
+} from "./TerritorialIndicatorPanel";
 
 type MapFeatureCollection = GeoJSON.FeatureCollection<
   GeoJSON.Geometry,
@@ -91,6 +112,70 @@ export function ElectoralMapContainer({
   const [coberturaMap, setCoberturaMap] = useState<Record<number, { compromisos: number; meta: number }>>({});
   const [legendOpen, setLegendOpen] = useState(false);
   const [layersOpen, setLayersOpen] = useState(false);
+  const [territorialMode, setTerritorialMode] =
+    useState<TerritorialMapMode>("POLITICAL");
+  const [territorialLevel, setTerritorialLevel] =
+    useState<TerritorialLevel>("MUNICIPIO");
+  const [territorialMetricKey, setTerritorialMetricKey] =
+    useState<TerritorialMetricKey>("poblacionTotal");
+  const [territorialResponse, setTerritorialResponse] =
+    useState<TerritorialIndicatorsResponse | null>(null);
+  const [territorialLoading, setTerritorialLoading] = useState(false);
+  const [thematicError, setThematicError] = useState<string | null>(null);
+  const [territorialRetryKey, setTerritorialRetryKey] = useState(0);
+  const [territorialSelectionEpoch, setTerritorialSelectionEpoch] = useState(0);
+  const overlayCacheRef = useRef<OverlayDataMap>({});
+  const overlayRequestsRef = useRef<
+    Partial<Record<OverlayKey, Promise<MapFeatureCollection>>>
+  >({});
+  const territorialCoordinatorRef = useRef<
+    ReturnType<typeof createTerritorialIndicatorsRequestCoordinator> | null
+  >(null);
+  const requiredThematicOverlay = getRequiredTerritorialOverlay(
+    territorialMode,
+    territorialLevel,
+  );
+  const effectiveActiveOverlays = useMemo(
+    () => buildEffectiveTerritorialOverlays(activeOverlays, requiredThematicOverlay),
+    [activeOverlays, requiredThematicOverlay],
+  );
+  const visibleOverlayData = useMemo(
+    () => Object.fromEntries(
+      Object.entries(overlayData).filter(([key]) =>
+        effectiveActiveOverlays.has(key as OverlayKey)
+      ),
+    ),
+    [effectiveActiveOverlays, overlayData],
+  );
+
+  if (territorialCoordinatorRef.current === null) {
+    territorialCoordinatorRef.current =
+      createTerritorialIndicatorsRequestCoordinator(
+        async (_key, signal, input) => {
+          const response = await fetch(buildTerritorialIndicatorsUrl(input), {
+            signal,
+            headers: { Accept: "application/json" },
+          });
+          if (!response.ok) {
+            throw new Error("No se pudieron cargar los indicadores territoriales");
+          }
+          return (await response.json()) as TerritorialIndicatorsResponse;
+        },
+        (value) => {
+          setTerritorialResponse(value);
+          if (value) {
+            setTerritorialSelectionEpoch((current) => current + 1);
+            setTerritorialLoading(false);
+            setThematicError(null);
+          }
+        },
+        () => {
+          setTerritorialResponse(null);
+          setTerritorialLoading(false);
+          setThematicError("No se pudieron cargar los indicadores territoriales");
+        }
+      );
+  }
 
   useEffect(() => {
     if (!isAnalytic) return;
@@ -252,25 +337,48 @@ export function ElectoralMapContainer({
     };
   }, [selectedMunicipio, seccionOverlayActive]);
 
+  const ensureOverlay = useCallback(async (key: OverlayKey) => {
+    if (key === "seccion") return;
+
+    const cached = overlayCacheRef.current[key];
+    if (cached) {
+      setOverlayData((current) => ({ ...current, [key]: cached }));
+      return;
+    }
+
+    let request = overlayRequestsRef.current[key];
+    if (!request) {
+      request = fetch(`/api/arcgis/${key}?returnGeometry=true`).then(
+        async (response) => {
+          if (!response.ok) throw new Error(await response.text());
+          return (await response.json()) as MapFeatureCollection;
+        }
+      );
+      overlayRequestsRef.current[key] = request;
+    }
+
+    try {
+      const data = await request;
+      overlayCacheRef.current[key] = data;
+      setOverlayData((current) => ({ ...current, [key]: data }));
+    } catch (overlayError) {
+      console.error(`Error cargando overlay ${key}:`, overlayError);
+      throw overlayError;
+    } finally {
+      delete overlayRequestsRef.current[key];
+    }
+  }, []);
+
   const toggleOverlay = useCallback(
     async (key: OverlayKey) => {
+      if (key === requiredThematicOverlay) return;
       const isCurrentlyActive = activeOverlays.has(key);
 
-      setActiveOverlays((prev) => {
-        const next = new Set(prev);
-        if (isCurrentlyActive) {
-          next.delete(key);
-        } else {
-          next.add(key);
-        }
-        return next;
-      });
-
       if (isCurrentlyActive) {
-        setOverlayData((d) => {
-          const copy = { ...d };
-          delete copy[key];
-          return copy;
+        setActiveOverlays((current) => {
+          const next = new Set(current);
+          next.delete(key);
+          return next;
         });
         return;
       }
@@ -280,25 +388,21 @@ export function ElectoralMapContainer({
 
       // La capa seccional versionada se carga en el efecto que también cancela
       // solicitudes obsoletas cuando cambia municipio o versión.
-      if (key === "seccion") return;
+      if (key === "seccion") {
+        setActiveOverlays((current) => new Set(current).add(key));
+        return;
+      }
 
-      const url = `/api/arcgis/${key}?returnGeometry=true`;
-
-      try {
-        const res = await fetch(url);
-        if (!res.ok) throw new Error(await res.text());
-        const data = (await res.json()) as MapFeatureCollection;
-        setOverlayData((d) => ({ ...d, [key]: data }));
-      } catch (err) {
-        console.error(`Error cargando overlay ${key}:`, err);
-        setActiveOverlays((prev) => {
-          const next = new Set(prev);
+      setActiveOverlays((current) => new Set(current).add(key));
+      await ensureOverlay(key).catch(() => {
+        setActiveOverlays((current) => {
+          const next = new Set(current);
           next.delete(key);
           return next;
         });
-      }
+      });
     },
-    [activeOverlays, selectedMunicipio]
+    [activeOverlays, ensureOverlay, requiredThematicOverlay, selectedMunicipio]
   );
 
   const handleVerSecciones = useCallback(() => {
@@ -308,6 +412,9 @@ export function ElectoralMapContainer({
   }, [activeOverlays, toggleOverlay]);
 
   const handleCartografiaVersionChange = useCallback((versionId: number) => {
+    territorialCoordinatorRef.current?.clear();
+    setTerritorialResponse(null);
+    setThematicError(null);
     setSelectedCartografiaVersionId(versionId);
     setOverlayData((current) => clearSectionOverlay(current));
     setSectionError(null);
@@ -324,6 +431,128 @@ export function ElectoralMapContainer({
     setSectionError(null);
     setSectionRefreshKey((current) => current + 1);
   }, [cartografiaError]);
+
+  const handleTerritorialModeChange = useCallback(
+    (mode: TerritorialMapMode) => {
+      territorialCoordinatorRef.current?.clear();
+      setTerritorialResponse(null);
+      setThematicError(null);
+      setTerritorialMode(mode);
+    },
+    []
+  );
+
+  const handleTerritorialLevelChange = useCallback((level: TerritorialLevel) => {
+    territorialCoordinatorRef.current?.clear();
+    setTerritorialResponse(null);
+    setThematicError(null);
+    setTerritorialLevel(level);
+  }, []);
+
+  const handleTerritorialRetry = useCallback(() => {
+    setTerritorialResponse(null);
+    setThematicError(null);
+    setTerritorialRetryKey((current) => current + 1);
+  }, []);
+
+  useEffect(() => {
+    if (territorialMode !== "INDICATOR" || selectedCartografiaVersionId == null) {
+      territorialCoordinatorRef.current?.clear();
+      setTerritorialResponse(null);
+      setTerritorialLoading(false);
+      setThematicError(null);
+      return;
+    }
+
+    let current = true;
+    setTerritorialResponse(null);
+    setTerritorialLoading(true);
+    setThematicError(null);
+
+    const load = async () => {
+      try {
+        if (territorialLevel === "DISTRITO_LOCAL") {
+          await ensureOverlay("distrito_local");
+        } else if (territorialLevel === "DISTRITO_FEDERAL") {
+          await ensureOverlay("distrito_federal");
+        }
+        if (!current) return;
+        await territorialCoordinatorRef.current?.select({
+          level: territorialLevel,
+          versionId: selectedCartografiaVersionId,
+          nominalCutId: null,
+          demographySourceId: null,
+        });
+      } catch {
+        if (!current) return;
+        territorialCoordinatorRef.current?.clear();
+        setTerritorialResponse(null);
+        setTerritorialLoading(false);
+        setThematicError("No se pudo preparar la capa territorial");
+      }
+    };
+
+    void load();
+    return () => {
+      current = false;
+      territorialCoordinatorRef.current?.clear();
+    };
+  }, [
+    ensureOverlay,
+    selectedCartografiaVersionId,
+    territorialLevel,
+    territorialMode,
+    territorialRetryKey,
+  ]);
+
+  const thematicPresentation = useMemo<TerritorialThemePresentation | null>(() => {
+    if (
+      territorialMode !== "INDICATOR" ||
+      thematicError || !territorialResponse ||
+      territorialResponse.rows.length === 0
+    ) {
+      return null;
+    }
+    return {
+      level: territorialLevel,
+      metricKey: territorialMetricKey,
+      versionId: territorialResponse.versionId,
+      selectionEpoch: territorialSelectionEpoch,
+      nominalSource: territorialResponse.nominalSource,
+      demographicSource: territorialResponse.demographicSource,
+      index: buildTerritorialIndicatorIndex(territorialResponse.rows),
+      scale: buildQuantileScale(
+        territorialResponse.rows.map(
+          (row) => row.metrics[territorialMetricKey]
+        )
+      ),
+    };
+  }, [
+    thematicError,
+    territorialLevel,
+    territorialMetricKey,
+    territorialMode,
+    territorialResponse,
+    territorialSelectionEpoch,
+  ]);
+
+  const indicatorControls = (
+    <TerritorialIndicatorPanel
+      mode={territorialMode}
+      level={territorialLevel}
+      metricKey={territorialMetricKey}
+      versionId={selectedCartografiaVersionId}
+      nominalSource={territorialResponse?.nominalSource ?? null}
+      demographicSource={territorialResponse?.demographicSource ?? null}
+      loading={territorialLoading}
+      error={thematicError}
+      onModeChange={handleTerritorialModeChange}
+      onLevelChange={handleTerritorialLevelChange}
+      onMetricChange={setTerritorialMetricKey}
+      onRetry={handleTerritorialRetry}
+    />
+  );
+  const hasVisibleLegend = isAnalytic || thematicPresentation !== null;
 
   if (error) {
     return (
@@ -500,7 +729,7 @@ export function ElectoralMapContainer({
               </Select>
             )}
 
-            {isAnalytic && (
+            {hasVisibleLegend && (
               <Button
                 variant="outline"
                 className="h-11 px-3"
@@ -525,20 +754,30 @@ export function ElectoralMapContainer({
       <main className="relative min-h-[68vh] flex-1 overflow-hidden bg-slate-100 shadow-inner 2xl:min-h-0">
         <EdomexInteractiveMap
           geoData={geoData}
-          overlayData={overlayData}
+          overlayData={visibleOverlayData}
           analytics={analytics}
           isAnalytic={isAnalytic}
           onMunicipioSelect={setSelectedMunicipio}
           onVerSecciones={handleVerSecciones}
           coberturaMap={coberturaMap}
           cartografiaVersionId={selectedCartografiaVersionId}
+          territorialTheme={thematicPresentation}
         />
 
-        {isAnalytic && (
+        {hasVisibleLegend && (
+          thematicPresentation ? (
+            <div className="absolute left-4 top-4 z-20 hidden 2xl:block">
+              <TerritorialIndicatorLegend
+                metricKey={territorialMetricKey}
+                scale={thematicPresentation.scale}
+              />
+            </div>
+          ) : isAnalytic ? (
             <MapLegend
-            data={analytics}
-            className="absolute left-4 top-4 z-20 hidden 2xl:block"
-          />
+              data={analytics}
+              className="absolute left-4 top-4 z-20 hidden 2xl:block"
+            />
+          ) : null
         )}
 
         <div className="absolute right-4 top-4 z-20 hidden w-72 flex-col gap-3 2xl:flex">
@@ -551,11 +790,13 @@ export function ElectoralMapContainer({
             onRetry={handleCartografiaRetry}
           />
           <LayerPanel
-            activeOverlays={activeOverlays}
+            activeOverlays={effectiveActiveOverlays}
+            requiredOverlay={requiredThematicOverlay}
             onToggle={toggleOverlay}
             hasMunicipioSelected={selectedMunicipio?.geoId != null}
             sectionAvailable={selectedCartografiaVersionId != null}
             coberturaMap={coberturaMap}
+            indicatorControls={indicatorControls}
           />
         </div>
 
@@ -576,13 +817,22 @@ export function ElectoralMapContainer({
       <Dialog open={legendOpen} onOpenChange={setLegendOpen}>
         <DialogContent className="top-auto bottom-4 left-4 right-4 w-auto max-w-none translate-x-0 translate-y-0 rounded-2xl p-0 sm:max-w-none 2xl:hidden">
           <DialogHeader className="px-4 pt-4">
-            <DialogTitle>Leyenda electoral</DialogTitle>
+            <DialogTitle>
+              {thematicPresentation ? "Leyenda territorial" : "Leyenda electoral"}
+            </DialogTitle>
             <DialogDescription>
               Distribucion de fuerzas y consistencia visible en el mapa.
             </DialogDescription>
           </DialogHeader>
           <div className="px-4 pb-4">
-            <MapLegend data={analytics} className="max-w-none shadow-none ring-0" />
+            {thematicPresentation ? (
+              <TerritorialIndicatorLegend
+                metricKey={territorialMetricKey}
+                scale={thematicPresentation.scale}
+              />
+            ) : (
+              <MapLegend data={analytics} className="max-w-none shadow-none ring-0" />
+            )}
           </div>
         </DialogContent>
       </Dialog>
@@ -597,11 +847,13 @@ export function ElectoralMapContainer({
           </DialogHeader>
           <div className="px-4 pb-4">
             <LayerPanel
-              activeOverlays={activeOverlays}
+              activeOverlays={effectiveActiveOverlays}
+              requiredOverlay={requiredThematicOverlay}
               onToggle={toggleOverlay}
               hasMunicipioSelected={selectedMunicipio?.geoId != null}
               sectionAvailable={selectedCartografiaVersionId != null}
               coberturaMap={coberturaMap}
+              indicatorControls={indicatorControls}
               className="min-w-0 shadow-none ring-0"
             />
           </div>

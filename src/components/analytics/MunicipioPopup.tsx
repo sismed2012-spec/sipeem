@@ -5,6 +5,12 @@ import { useRouter } from "next/navigation";
 import { X, Loader2 } from "lucide-react";
 import type { MapAnalyticsDTO } from "@/actions/analytics";
 import type { EstructuraResumen } from "@/actions/estructura";
+import type {
+  TerritorialIndicatorRow,
+  TerritorialIndicatorsResponse,
+  TerritorialMetricKey,
+} from "@/lib/territorial-indicators-types";
+import { TerritorialIndicatorSummary } from "./TerritorialIndicatorSummary";
 
 export interface ArcGISMunicipioProps {
   nombre: string;
@@ -21,6 +27,12 @@ interface Props {
   municipioId: number | null;
   onClose: () => void;
   onVerSecciones: () => void;
+  territorialIndicator?: {
+    row: TerritorialIndicatorRow;
+    metricKey: TerritorialMetricKey;
+    nominalSource: TerritorialIndicatorsResponse["nominalSource"];
+    demographicSource: TerritorialIndicatorsResponse["demographicSource"];
+  } | null;
 }
 
 type Tab = "cartografia" | "electoral" | "estructura";
@@ -31,6 +43,7 @@ export function MunicipioPopup({
   municipioId,
   onClose,
   onVerSecciones,
+  territorialIndicator = null,
 }: Props) {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("cartografia");
@@ -77,6 +90,12 @@ export function MunicipioPopup({
           <X className="h-4 w-4" />
         </button>
       </div>
+
+      {territorialIndicator ? (
+        <div className="border-b border-slate-100 p-3">
+          <TerritorialIndicatorSummary {...territorialIndicator} />
+        </div>
+      ) : null}
 
       <div className="flex border-b border-slate-100">
         {(["cartografia", "electoral", "estructura"] as Tab[]).map((t) => (

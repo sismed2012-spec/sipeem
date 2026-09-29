@@ -1,5 +1,7 @@
 "use client";
 
+import type { ReactNode } from "react";
+
 import { cn } from "@/lib/utils";
 
 export type OverlayKey =
@@ -24,19 +26,23 @@ const OVERLAY_LAYERS: OverlayLayer[] = [
 
 interface Props {
   activeOverlays: Set<OverlayKey>;
+  requiredOverlay?: OverlayKey | null;
   onToggle: (key: OverlayKey) => void;
   hasMunicipioSelected: boolean;
   sectionAvailable?: boolean;
   coberturaMap?: Record<number, { compromisos: number; meta: number }>;
+  indicatorControls?: ReactNode;
   className?: string;
 }
 
 export function LayerPanel({
   activeOverlays,
+  requiredOverlay = null,
   onToggle,
   hasMunicipioSelected,
   sectionAvailable = true,
   coberturaMap = {},
+  indicatorControls,
   className,
 }: Props) {
   const hasCoberturaData = Object.keys(coberturaMap).length > 0;
@@ -59,15 +65,21 @@ export function LayerPanel({
         <span className="text-slate-600 text-[9px] ml-auto">base</span>
       </div>
 
+      {indicatorControls}
+
       {OVERLAY_LAYERS.map((layer) => {
         const active = activeOverlays.has(layer.key);
-        const disabled =
+        const required = requiredOverlay === layer.key;
+        const disabled = required || (
           layer.lazy &&
           (!hasMunicipioSelected || !sectionAvailable) &&
-          !active;
-        const disabledTitle = !sectionAvailable
-          ? "Cartografía versionada no disponible"
-          : "Selecciona un municipio primero";
+          !active
+        );
+        const disabledTitle = required
+          ? "Requerida por el indicador territorial"
+          : !sectionAvailable
+            ? "Cartografía versionada no disponible"
+            : "Selecciona un municipio primero";
 
         return (
           <button

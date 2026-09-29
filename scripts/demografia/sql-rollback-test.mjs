@@ -17,14 +17,29 @@ export function composeRollbackSql(parts) {
   return `begin;\n${parts.join("\n")}\nrollback;\n`;
 }
 
+export function normalizeTransactionalSql(sql) {
+  const match = sql.trim().match(/^begin\s*;([\s\S]*)(?:commit|rollback)\s*;$/iu);
+  if (!match) {
+    throw new Error("SQL must be a complete outer transaction");
+  }
+  const body = match[1].trim();
+  if (/\b(?:begin|commit|rollback)\s*;/iu.test(body)) {
+    throw new Error("Nested transaction control is forbidden");
+  }
+  return body;
+}
+
 export function parseRollbackTestArgs(argv) {
   let projectRef = null;
+  let stripOuterTransaction = false;
   const files = [];
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
     if (argument === "--project-ref") {
       projectRef = argv[index + 1] ?? null;
       index += 1;
+    } else if (argument === "--strip-outer-transaction") {
+      stripOuterTransaction = true;
     } else if (argument.startsWith("--")) {
       throw new Error(`Unknown argument: ${argument}`);
     } else {
@@ -35,11 +50,14 @@ export function parseRollbackTestArgs(argv) {
     throw new Error(`Only SIPEEM-DEV is allowed (${DEV_PROJECT_REF})`);
   }
   if (files.length === 0) throw new Error("At least one SQL file is required");
-  return { projectRef, files };
+  return { projectRef, files, stripOuterTransaction };
 }
 
-export async function runRollbackSqlTest({ projectRef, files }) {
-  const parts = await Promise.all(files.map((file) => readFile(file, "utf8")));
+export async function runRollbackSqlTest({ projectRef, files, stripOuterTransaction }) {
+  let parts = await Promise.all(files.map((file) => readFile(file, "utf8")));
+  if (stripOuterTransaction) {
+    parts = parts.map(normalizeTransactionalSql);
+  }
   const sql = composeRollbackSql(parts);
   const temporaryDirectory = await mkdtemp(
     path.join(os.tmpdir(), "sipeem-sql-rollback-")
