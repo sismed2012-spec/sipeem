@@ -52,7 +52,17 @@ custom_estimator_operators as (
   from pg_catalog.pg_operator o
   join pg_catalog.pg_namespace n on n.oid = o.oprnamespace
   where n.nspname not in ('pg_catalog', 'information_schema')
-    and (o.oprrest <> 0 or o.oprjoin <> 0)
+    and (
+      (o.oprrest <> 0 and o.oprrest::oid >= 10000)
+      or (o.oprjoin <> 0 and o.oprjoin::oid >= 10000)
+    )
+    and not exists (
+      select 1
+      from pg_catalog.pg_depend d
+      where d.classid = 'pg_catalog.pg_operator'::pg_catalog.regclass
+        and d.objid = o.oid
+        and d.deptype = 'e'
+    )
 ),
 signals as (
   select

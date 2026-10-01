@@ -195,7 +195,9 @@ export async function runReadOnlyPreflight({
     issues.push(issue("MIGRATION_AUDIT_FAILED", `${auditResult?.errors?.length ?? 0} error(s)`));
   }
   if (!psql?.available) {
-    issues.push(issue("PSQL_UNAVAILABLE", psql?.detail || "psql unavailable"));
+    issues.push(
+      issue("PSQL_UNAVAILABLE", psql?.detail || "psql unavailable", "data"),
+    );
   }
   if (!docker?.available) {
     issues.push(issue("DOCKER_UNAVAILABLE", docker?.detail || "Docker unavailable", "data"));

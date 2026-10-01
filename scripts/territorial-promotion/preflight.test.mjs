@@ -58,7 +58,13 @@ function compatibility(overrides = {}) {
   };
 }
 
-function dependencies({ projectRef, docker = true, reportOverrides, compatibilityOverrides } = {}) {
+function dependencies({
+  projectRef,
+  docker = true,
+  psql = true,
+  reportOverrides,
+  compatibilityOverrides,
+} = {}) {
   const calls = { audit: 0, docker: 0, psql: 0, query: [] };
   return {
     calls,
@@ -72,7 +78,7 @@ function dependencies({ projectRef, docker = true, reportOverrides, compatibilit
     },
     psqlHealth: async () => {
       calls.psql += 1;
-      return { available: true, detail: "17.11" };
+      return { available: psql, detail: psql ? "17.11" : "psql unavailable" };
     },
     queryProject: async ({ sqlFile }) => {
       calls.query.push(sqlFile);
@@ -128,6 +134,23 @@ test("runs every read-only dependency once and isolates missing Docker to data",
   assert.match(deps.calls.query[0], /promotion_preflight\.sql$/u);
   assert.match(deps.calls.query[1], /promotion_pg17_compatibility\.sql$/u);
   assert.ok(result.issues.some(({ code }) => code === "DOCKER_UNAVAILABLE"));
+});
+
+test("isolates missing psql to data transfer without blocking schema", async () => {
+  const deps = dependencies({ projectRef: TARGET_PROJECT_REF, psql: false });
+  const result = await runReadOnlyPreflight({
+    role: "target",
+    projectRef: TARGET_PROJECT_REF,
+    manifest: manifest(),
+    migrationDir: "migrations",
+    exceptions: [],
+    dependencies: deps,
+  });
+
+  assert.equal(result.status, "BLOCKED");
+  assert.equal(result.schemaSimulation.status, "PASSED");
+  assert.equal(result.dataTransfer.status, "BLOCKED");
+  assert.ok(result.issues.some(({ code, scope }) => code === "PSQL_UNAVAILABLE" && scope === "data"));
 });
 
 test("blocks a source whose territorial objects or manifest counts drift", async () => {
@@ -231,5 +254,11 @@ test("ships two single-statement read-only probes with the required signals", as
     );
     assert.equal((sql.match(/;\s*(?:--[^\n]*)?(?=\s*$)/gu) ?? []).length, 1);
     for (const signal of signals) assert.match(sql.toLowerCase(), new RegExp(signal, "u"));
+    if (file.endsWith("promotion_pg17_compatibility.sql")) {
+      assert.match(sql, /oprrest::oid\s*>=\s*10000/iu);
+      assert.match(sql, /oprjoin::oid\s*>=\s*10000/iu);
+      assert.match(sql, /pg_depend/iu);
+      assert.match(sql, /deptype\s*=\s*'e'/iu);
+    }
   }
 });
