@@ -76,8 +76,8 @@ export async function inspectTerritorialLayout(rootDir) {
       `Expected 49 territorial migrations, found ${territorialMigrations.length}`,
     );
   }
-  if (testFiles.length !== 23) {
-    errors.push(`Expected 23 territorial tests, found ${testFiles.length}`);
+  if (testFiles.length !== 24) {
+    errors.push(`Expected 24 territorial tests, found ${testFiles.length}`);
   }
 
   if (config === null) {
