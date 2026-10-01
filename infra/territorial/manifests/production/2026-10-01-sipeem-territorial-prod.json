@@ -3,7 +3,7 @@
   "hashAlgorithm": "sha256",
   "promotionId": "sipeem-territorial-prod-2026-10-01",
   "createdAt": "2026-10-01T17:17:44.425Z",
-  "sourceCommit": "35dd85b8c7e8150b691119efabbe80df13e2c55d",
+  "sourceCommit": "7eddaa3ec964c28ae9a466f2da513ab0052f5142",
   "source": {
     "projectRef": "nppvprbfmjbhwheghipa",
     "postgresVersion": "17.6"
@@ -543,5 +543,5 @@
     "ecegSections": 6544,
     "nominalRows": 7191
   },
-  "manifestSha256": "d12a7af22ddf38c13b9fd1a923ca2efd8388b7dc7af64381641b676935e3d07e"
+  "manifestSha256": "8afa611bbdaf1d83889f28c699831caa726f25c958063df524c5efb7cb473ca4"
 }
