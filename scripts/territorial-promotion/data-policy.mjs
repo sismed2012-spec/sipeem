@@ -7,6 +7,7 @@ const TABLE_NAME = /^public\.[a-z_][a-z0-9_$]*$/u;
 const MIGRATION_NAME = /^202609\d{8}_[a-z0-9_]+\.sql$/u;
 const COLUMN_NAME = /^[a-z_][a-z0-9_$]*$/u;
 const SEQUENCE_NAME = /^public\.[a-z_][a-z0-9_$]*_seq$/u;
+const TRANSFORM_TYPE = "null_orphan_reference";
 const REQUIRED_EXCLUSIONS = new Set([
   "public.staging_electoral_incidencias",
   "public.staging_electoral_registros",
@@ -101,10 +102,49 @@ function dependencyIsDocumented(entry, foreignKey) {
   );
 }
 
+function validateRestoreTransform(transform) {
+  if (transform?.type !== TRANSFORM_TYPE) {
+    throw new Error(`Unsupported restore transform: ${String(transform?.type)}`);
+  }
+  for (const [field, value] of [
+    ["table", transform.table],
+    ["referencedTable", transform.referencedTable],
+  ]) {
+    if (!TABLE_NAME.test(value ?? "")) throw new Error(`Invalid restore transform ${field}`);
+  }
+  for (const [field, value] of [
+    ["column", transform.column],
+    ["referencedColumn", transform.referencedColumn],
+  ]) {
+    if (!COLUMN_NAME.test(value ?? "")) throw new Error(`Invalid restore transform ${field}`);
+  }
+  if (typeof transform.reason !== "string" || transform.reason.trim().length < 10) {
+    throw new Error("Every restore transform requires an exact reason");
+  }
+  return structuredClone(transform);
+}
+
+function foreignKeyColumns(foreignKey) {
+  if (Array.isArray(foreignKey?.columns)) return foreignKey.columns;
+  if (Array.isArray(foreignKey?.fromColumns) && Array.isArray(foreignKey?.toColumns)) {
+    return foreignKey.fromColumns.map((from, index) => ({ from, to: foreignKey.toColumns[index] }));
+  }
+  return [];
+}
+
+function transformMatchesForeignKey(transform, foreignKey) {
+  const columns = foreignKeyColumns(foreignKey);
+  return transform.table === foreignKey.fromTable &&
+    transform.referencedTable === foreignKey.toTable &&
+    columns.length === 1 &&
+    transform.column === columns[0]?.from &&
+    transform.referencedColumn === columns[0]?.to;
+}
+
 export function classifySourceTables({ inventory, dataPolicy }) {
   const actualFingerprint = computeInventoryFingerprint(inventory);
   if (
-    ![1, 2].includes(dataPolicy?.contractVersion) ||
+    ![1, 2, 3].includes(dataPolicy?.contractVersion) ||
     !SHA256.test(dataPolicy.sourceInventorySha256 ?? "")
   ) {
     throw new Error("Invalid data policy contract or inventory fingerprint");
@@ -118,12 +158,16 @@ export function classifySourceTables({ inventory, dataPolicy }) {
   if (
     !Array.isArray(dataPolicy.include) ||
     !Array.isArray(dataPolicy.exclude) ||
-    (dataPolicy.contractVersion === 2 && !Array.isArray(dataPolicy.preseeded)) ||
+    ([2, 3].includes(dataPolicy.contractVersion) && !Array.isArray(dataPolicy.preseeded)) ||
+    (dataPolicy.contractVersion === 3 && !Array.isArray(dataPolicy.restoreTransforms)) ||
     (dataPolicy.contractVersion === 1 && dataPolicy.preseeded !== undefined)
   ) {
     throw new Error("Data policy must define arrays supported by its contract version");
   }
-  const preseeded = dataPolicy.contractVersion === 2 ? dataPolicy.preseeded : [];
+  const preseeded = dataPolicy.contractVersion >= 2 ? dataPolicy.preseeded : [];
+  const restoreTransforms = dataPolicy.contractVersion === 3
+    ? dataPolicy.restoreTransforms.map(validateRestoreTransform)
+    : [];
 
   const observed = new Set();
   for (const table of inventory.tables) {
@@ -170,6 +214,12 @@ export function classifySourceTables({ inventory, dataPolicy }) {
           `Foreign key ${foreignKey.name} crosses included ${foreignKey.fromTable} to excluded ${foreignKey.toTable}`,
         );
       }
+      if (
+        dataPolicy.contractVersion === 3 &&
+        !restoreTransforms.some((transform) => transformMatchesForeignKey(transform, foreignKey))
+      ) {
+        throw new Error(`Foreign key ${foreignKey.name} requires an exact orphan restore transform`);
+      }
     }
     if (from?.category === "preseeded" && to?.category !== "preseeded") {
       throw new Error(
@@ -193,6 +243,8 @@ export function classifySourceTables({ inventory, dataPolicy }) {
       .sort(),
     exclude: excluded,
     preseeded: preseededEntries,
+    restoreTransforms: restoreTransforms.sort((left, right) =>
+      `${left.table}.${left.column}`.localeCompare(`${right.table}.${right.column}`)),
     excludedFromDump: [...excluded, ...preseededEntries.map(({ table }) => table)].sort(),
     inventorySha256: actualFingerprint,
   };

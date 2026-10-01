@@ -26,6 +26,7 @@ function manifest() {
       nominalRows: 7191,
     },
     dataPolicy: {
+      preseeded: [],
       expectedSources: {
         demographic: [{ sha256: "d".repeat(64), state: "PUBLICADA" }],
         nominal: [{ sha256: "e".repeat(64), state: "PUBLICADO" }],
@@ -59,6 +60,10 @@ function report() {
       functionViolations: [],
     },
     operationalObjects: [],
+    traceability: {
+      orphanedResultadoStagingReferences: 0,
+      nonNullResultadoStagingReferences: 0,
+    },
   };
 }
 
@@ -138,6 +143,7 @@ test("blocks every mismatch without tolerance", async () => {
     { rpc: { missing: ["public.rpc_get_seccion"] } },
     { security: { ...report().security, rlsViolations: ["public.bad"] } },
     { operationalObjects: ["public.usuarios"] },
+    { traceability: { ...report().traceability, orphanedResultadoStagingReferences: 1 } },
   ];
   for (const override of variants) {
     const deps = dependencies({ ...report(), ...override });
@@ -174,6 +180,41 @@ test("blocks critical Supabase advisors and probe failures", async () => {
   });
   assert.equal(failure.status, "BLOCKED");
   assert.doesNotMatch(JSON.stringify(failure), /hunter2/iu);
+});
+
+test("repeats exact preseeded source-target parity before VERIFIED", async () => {
+  const activeManifest = manifest();
+  activeManifest.dataPolicy.preseeded = [{
+    table: "public.cat_estados_evento",
+    ownedSequences: ["public.cat_estados_evento_estado_evento_id_seq"],
+  }];
+  const catalog = (rowsSha256) => JSON.stringify({
+    contractVersion: 1,
+    kind: "promotion_preseeded_catalogs",
+    tables: [{
+      table: "public.cat_estados_evento",
+      rowCount: 2,
+      rowsSha256,
+      sequences: [{
+        name: "public.cat_estados_evento_estado_evento_id_seq",
+        lastValue: 2,
+        isCalled: true,
+      }],
+    }],
+  });
+  const deps = dependencies();
+  deps.queryPreseeded = async () => ({
+    source: { exitCode: 0, stdout: catalog("a".repeat(64)), stderr: "" },
+    target: { exitCode: 0, stdout: catalog("b".repeat(64)), stderr: "" },
+  });
+  const result = await verifyPromotion({
+    manifest: activeManifest,
+    projectRef: TARGET_PROJECT_REF,
+    journal: dataAppliedJournal(),
+    dependencies: deps,
+  });
+  assert.equal(result.status, "BLOCKED");
+  assert.ok(result.issues.some(({ code }) => code === "PRESEEDED_ROW_HASH_MISMATCH"));
 });
 
 test("resumes a blocked recovery verification using immutable predecessor expectations", async () => {

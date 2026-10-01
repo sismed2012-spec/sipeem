@@ -139,6 +139,20 @@ advisor_ready_checks as (
     'performanceCritical', (select count(*) from pg_catalog.pg_index where not indisvalid)
   ) as value
   from rls_violations, privilege_violations, function_violations
+),
+traceability_report as (
+  select jsonb_build_object(
+    'orphanedResultadoStagingReferences', count(*) filter (
+      where force_result.resultado_staging_id is not null
+        and staging_result.resultado_staging_id is null
+    ),
+    'nonNullResultadoStagingReferences', count(*) filter (
+      where force_result.resultado_staging_id is not null
+    )
+  ) as value
+  from public.resultados_municipales_oficiales_fuerzas force_result
+  left join public.staging_electoral_resultados staging_result
+    on staging_result.resultado_staging_id = force_result.resultado_staging_id
 )
 select jsonb_build_object(
   'contractVersion', 1,
@@ -150,7 +164,9 @@ select jsonb_build_object(
   'rpc', rpc_report.value,
   'security', security_report.value,
   'operationalObjects', operational_report.value,
-  'advisorReadiness', advisor_ready_checks.value
+  'advisorReadiness', advisor_ready_checks.value,
+  'traceability', traceability_report.value
 )
 from territorial_counts, source_states, geometry_report, correspondence_report,
-     rpc_report, security_report, operational_report, advisor_ready_checks;
+     rpc_report, security_report, operational_report, advisor_ready_checks,
+     traceability_report;

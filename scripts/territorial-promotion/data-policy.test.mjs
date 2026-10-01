@@ -272,12 +272,52 @@ test("allows included references to preseeded catalogs but blocks the inverse", 
   );
 });
 
+test("requires an exact null-orphan transform for included references to excluded staging", () => {
+  const sourceInventory = inventory();
+  sourceInventory.foreignKeys = [{
+    name: "canonical_staging_id_fkey",
+    fromTable: "public.child",
+    fromColumns: ["staging_id"],
+    toTable: "public.staging_electoral_resultados",
+    toColumns: ["resultado_staging_id"],
+  }];
+  const base = policy(sourceInventory);
+  base.sourceInventorySha256 = computeInventoryFingerprint(sourceInventory);
+  base.contractVersion = 3;
+  base.preseeded = [];
+  base.exclude = base.exclude.map((entry) => entry.table === "public.staging_electoral_resultados"
+    ? {
+        ...entry,
+        documentedIncomingDependencies: [{
+          fromTable: "public.child",
+          constraint: "canonical_staging_id_fkey",
+          reason: "Canonical row keeps data while transient provenance is removed.",
+        }],
+      }
+    : entry);
+  base.restoreTransforms = [];
+  assert.throws(
+    () => classifySourceTables({ inventory: sourceInventory, dataPolicy: base }),
+    /restore transform|orphan/iu,
+  );
+  base.restoreTransforms.push({
+    type: "null_orphan_reference",
+    table: "public.child",
+    column: "staging_id",
+    referencedTable: "public.staging_electoral_resultados",
+    referencedColumn: "resultado_staging_id",
+    reason: "Preserve the canonical row and clear only excluded provenance.",
+  });
+  const reviewed = classifySourceTables({ inventory: sourceInventory, dataPolicy: base });
+  assert.equal(reviewed.restoreTransforms.length, 1);
+});
+
 test("pins the reviewed SIPEEM-DEV inventory policy", async () => {
   const reviewed = JSON.parse(
     await readFile("infra/territorial/data-policy.json", "utf8"),
   );
   assert.equal(reviewed.sourceInventorySha256, "5f6199fd6d1de9036149afabf6b377e395c460b3c8c30641aac48ef7c988d9d9");
-  assert.equal(reviewed.contractVersion, 2);
+  assert.equal(reviewed.contractVersion, 3);
   assert.equal(reviewed.sourceSnapshot.tableCount, 66);
   assert.equal(reviewed.include.length, 57);
   assert.deepEqual(
@@ -296,6 +336,11 @@ test("pins the reviewed SIPEEM-DEV inventory policy", async () => {
     ],
   );
   assert.ok(reviewed.include.some(({ table }) => table === "public.fuerzas_electorales"));
+  assert.deepEqual(reviewed.restoreTransforms.map(({ type, table, column }) => ({ type, table, column })), [{
+    type: "null_orphan_reference",
+    table: "public.resultados_municipales_oficiales_fuerzas",
+    column: "resultado_staging_id",
+  }]);
   const names = [...reviewed.include, ...reviewed.exclude, ...reviewed.preseeded]
     .map(({ table }) => table);
   assert.equal(new Set(names).size, 66);

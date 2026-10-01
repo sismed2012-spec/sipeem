@@ -1,5 +1,5 @@
 {
-  "contractVersion": 2,
+  "contractVersion": 3,
   "sourceProjectRef": "nppvprbfmjbhwheghipa",
   "sourceInventorySha256": "5f6199fd6d1de9036149afabf6b377e395c460b3c8c30641aac48ef7c988d9d9",
   "sourceSnapshot": {
@@ -89,6 +89,16 @@
           "reason": "The nullable source-trace pointer is non-canonical provenance; restore handling must preserve the official result while not requiring transient staging rows."
         }
       ]
+    }
+  ],
+  "restoreTransforms": [
+    {
+      "type": "null_orphan_reference",
+      "table": "public.resultados_municipales_oficiales_fuerzas",
+      "column": "resultado_staging_id",
+      "referencedTable": "public.staging_electoral_resultados",
+      "referencedColumn": "resultado_staging_id",
+      "reason": "Preserve every canonical official-force result while clearing only provenance pointers whose transient staging rows are intentionally excluded."
     }
   ],
   "preseeded": [

@@ -97,6 +97,32 @@ function sha256(value) {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
 }
 
+export async function resolveFrozenDataPolicy(manifest, loadPredecessor) {
+  if (manifest?.contractVersion === 2) {
+    const loaded = await loadPredecessor(manifest.recovery?.predecessorManifestSha256);
+    if (!loaded?.predecessorManifest?.dataPolicy) {
+      throw new Error("Recovery predecessor data policy is unavailable");
+    }
+    return loaded.predecessorManifest.dataPolicy;
+  }
+  if (!manifest?.dataPolicy) throw new Error("Manifest data policy is unavailable");
+  return manifest.dataPolicy;
+}
+
+export function classifyDataRestoreProbe({ report, expectations }) {
+  if (report?.contractVersion !== 1 || report?.kind !== "promotion_postflight") {
+    throw new Error("Data-state probe returned an invalid postflight report");
+  }
+  const actualKeys = Object.keys(report.counts ?? {}).sort();
+  const expectedKeys = Object.keys(expectations ?? {}).sort();
+  const exact = JSON.stringify(actualKeys) === JSON.stringify(expectedKeys) &&
+    expectedKeys.every((key) => report.counts[key] === expectations[key]);
+  const status = exact
+    ? "COMPLETE"
+    : "PARTIAL";
+  return { status, evidenceSha256: sha256({ report, expectations, status }) };
+}
+
 async function runGit(repoRoot, args) {
   const result = await runProcessOnce({ command: "git", args, cwd: repoRoot });
   if (result.exitCode !== 0) throw new Error(`Git check failed: ${result.stderr}`);
@@ -219,6 +245,23 @@ function createDefaultDependencies(repoRoot = process.cwd()) {
       },
       loadPredecessor,
     });
+  };
+  const queryProjectSql = async ({ projectRef, sqlFile, phase = "verify" }) => {
+    const args = ["db", "query", "--linked", "--file", path.resolve(repoRoot, sqlFile)];
+    assertSafeOperation({ phase, projectRef, args });
+    const invocation = buildSupabaseInvocation({ args, projectRef });
+    return runProcessOnce({ ...invocation, cwd: repoRoot });
+  };
+  const queryNativeAdvisors = async ({ projectRef }) => {
+    const args = [
+      "db", "advisors", "--linked", "--project-ref", projectRef,
+      "--type", "all", "--level", "error", "--fail-on", "error", "-o", "json",
+    ];
+    const result = await runProcessOnce({ command: "npm.cmd", args: ["exec", "supabase", "--", ...args], cwd: repoRoot });
+    if (result.exitCode !== 0) {
+      throw new Error(`Native Supabase advisors BLOCKED: ${result.stderr || result.stdout}`);
+    }
+    return { securityCritical: 0, performanceCritical: 0 };
   };
 
   const commands = {
@@ -370,7 +413,7 @@ function createDefaultDependencies(repoRoot = process.cwd()) {
       }
       const [inventory, dataPolicy] = await Promise.all([
         queryInventory(repoRoot),
-        readFile(path.join(repoRoot, "infra", "territorial", "data-policy.json"), "utf8").then(JSON.parse),
+        resolveFrozenDataPolicy(manifest, loadPredecessor),
       ]);
       const plan = buildDumpPlan({ inventory, dataPolicy, artifactPath: paths.artifact });
       const artifact = await createDataArtifact({ plan, manifest, repoRoot });
@@ -406,6 +449,17 @@ function createDefaultDependencies(repoRoot = process.cwd()) {
               PGSSLMODE: process.env.TERRITORIAL_PGSSLMODE ?? "require",
             },
           }),
+          probeDataState: async ({ projectRef, manifest: activeManifest }) => {
+            const result = await queryProjectSql({
+              projectRef,
+              sqlFile: "infra/territorial/supabase/tests/promotion_postflight.sql",
+            });
+            if (result.exitCode !== 0) throw new Error(`Data-state probe BLOCKED: ${result.stderr}`);
+            return classifyDataRestoreProbe({
+              report: unwrapQueryReport(result.stdout, "promotion_postflight"),
+              expectations: activeManifest.expectations,
+            });
+          },
         },
       });
       let failure = null;
@@ -437,6 +491,19 @@ function createDefaultDependencies(repoRoot = process.cwd()) {
         repoRoot,
         dependencies: {
           expectedDataPolicy,
+          queryProject: ({ projectRef }) => queryProjectSql({
+            projectRef,
+            sqlFile: "infra/territorial/supabase/tests/promotion_postflight.sql",
+          }),
+          queryAdvisors: queryNativeAdvisors,
+          queryPreseeded: async ({ sourceProjectRef, targetProjectRef }) => {
+            const sqlFile = "infra/territorial/supabase/tests/promotion_preseeded_catalogs.sql";
+            const [source, target] = await Promise.all([
+              queryProjectSql({ projectRef: sourceProjectRef, sqlFile }),
+              queryProjectSql({ projectRef: targetProjectRef, sqlFile }),
+            ]);
+            return { source, target };
+          },
           persistJournal: (value) => saveJournalAtomically(paths.journal, value),
         },
       });

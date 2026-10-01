@@ -2,7 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { SOURCE_PROJECT_REF, TARGET_PROJECT_REF } from "./policy.mjs";
-import { parsePromotionArgs, runPromotionCommand, runtimePaths } from "./cli.mjs";
+import {
+  classifyDataRestoreProbe,
+  parsePromotionArgs,
+  resolveFrozenDataPolicy,
+  runPromotionCommand,
+  runtimePaths,
+} from "./cli.mjs";
 
 const MANIFEST_SHA = "a".repeat(64);
 
@@ -206,4 +212,33 @@ test("maps confirmed failure to 1 and does not expose a retry field", async () =
   assert.equal(result.exitCode, 1);
   assert.equal("retry" in result.summary, false);
   assert.doesNotMatch(JSON.stringify(result), /secret/iu);
+});
+
+test("binds recovery data planning to the immutable predecessor policy", async () => {
+  const predecessorPolicy = { contractVersion: 3, marker: "frozen" };
+  const currentPolicy = { contractVersion: 3, marker: "mutable" };
+  const recovery = recoveryManifest({ dataPolicy: currentPolicy });
+  const resolved = await resolveFrozenDataPolicy(recovery, async (hash) => {
+    assert.equal(hash, recovery.recovery.predecessorManifestSha256);
+    return { predecessorManifest: { dataPolicy: predecessorPolicy } };
+  });
+  assert.equal(resolved, predecessorPolicy);
+  assert.equal(await resolveFrozenDataPolicy(manifest({ dataPolicy: currentPolicy }), async () => {
+    throw new Error("must not load predecessor");
+  }), currentPolicy);
+});
+
+test("classifies interrupted data restores from an exact read-only postflight", () => {
+  const expectations = { sections: 7052, municipalities: 125 };
+  const complete = classifyDataRestoreProbe({
+    report: { contractVersion: 1, kind: "promotion_postflight", counts: expectations },
+    expectations,
+  });
+  const partial = classifyDataRestoreProbe({
+    report: { contractVersion: 1, kind: "promotion_postflight", counts: { ...expectations, sections: 7000 } },
+    expectations,
+  });
+  assert.equal(complete.status, "COMPLETE");
+  assert.equal(partial.status, "PARTIAL");
+  assert.match(complete.evidenceSha256, /^[a-f0-9]{64}$/u);
 });

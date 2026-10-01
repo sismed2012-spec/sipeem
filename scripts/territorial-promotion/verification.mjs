@@ -8,6 +8,7 @@ import {
   buildSupabaseInvocation,
 } from "./policy.mjs";
 import { redactSensitiveText, runProcessOnce } from "./process.mjs";
+import { comparePreseededReports, parsePreseededReport } from "./preseeded.mjs";
 
 function canonicalize(value) {
   if (Array.isArray(value)) return value.map(canonicalize);
@@ -110,6 +111,14 @@ function validateReport(report, manifest, advisors, expectedDataPolicy) {
   if (!Array.isArray(report.operationalObjects) || report.operationalObjects.length > 0) {
     issues.push(issue("OPERATIONAL_OBJECT_PRESENT", canonicalJson(report.operationalObjects ?? null)));
   }
+  for (const [field, code] of [
+    ["orphanedResultadoStagingReferences", "ORPHANED_STAGING_REFERENCE"],
+    ["nonNullResultadoStagingReferences", "NON_NULL_STAGING_REFERENCE"],
+  ]) {
+    if (!Number.isSafeInteger(report.traceability?.[field]) || report.traceability[field] !== 0) {
+      issues.push(issue(code, canonicalJson(report.traceability?.[field] ?? null)));
+    }
+  }
   if (
     !advisors ||
     advisors.securityCritical !== 0 ||
@@ -183,11 +192,13 @@ export async function verifyPromotion({
   }
 
   const queryProject = dependencies.queryProject ?? defaultQueryProject;
-  const queryAdvisors = dependencies.queryAdvisors ?? (async () => null);
+  const queryAdvisors = dependencies.queryAdvisors;
   let queryResult;
   let advisors;
+  let preseeded = null;
   const issues = [];
   try {
+    if (typeof queryAdvisors !== "function") throw new Error("Native Supabase advisors are required");
     [queryResult, advisors] = await Promise.all([
       queryProject({ projectRef, repoRoot }),
       queryAdvisors({ projectRef }),
@@ -220,7 +231,32 @@ export async function verifyPromotion({
   }
   else if (issues.length === 0) issues.push(issue("POSTFLIGHT_FAILED", "No postflight report"));
 
-  const evidenceSha256 = evidence({ report, advisors, issues });
+  const expectedDataPolicy = dependencies.expectedDataPolicy ?? manifest.dataPolicy;
+  if (Array.isArray(expectedDataPolicy?.preseeded) && expectedDataPolicy.preseeded.length > 0) {
+    if (typeof dependencies.queryPreseeded !== "function") {
+      issues.push(issue("PRESEEDED_PROBE_MISSING", "Source and target preseeded parity is required"));
+    } else {
+      try {
+        const queried = await dependencies.queryPreseeded({
+          sourceProjectRef: manifest.source.projectRef,
+          targetProjectRef: projectRef,
+        });
+        if (queried?.source?.exitCode !== 0 || queried?.target?.exitCode !== 0) {
+          throw new Error(queried?.source?.stderr || queried?.target?.stderr || "preseeded query failed");
+        }
+        preseeded = comparePreseededReports({
+          source: parsePreseededReport(queried.source.stdout),
+          target: parsePreseededReport(queried.target.stdout),
+          expectedTables: expectedDataPolicy.preseeded,
+        });
+        issues.push(...preseeded.issues.map((entry) => issue(`PRESEEDED_${entry.code}`, entry.detail)));
+      } catch (error) {
+        issues.push(issue("PRESEEDED_PROBE_FAILED", redactSensitiveText(error?.message ?? String(error))));
+      }
+    }
+  }
+
+  const evidenceSha256 = evidence({ report, advisors, preseeded, issues });
   const passed = issues.length === 0;
   let finalJournal = current;
   if (passed || current.state !== "BLOCKED") {
@@ -237,5 +273,6 @@ export async function verifyPromotion({
     issues,
     evidenceSha256,
     report,
+    preseeded,
   };
 }

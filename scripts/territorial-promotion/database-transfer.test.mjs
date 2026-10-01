@@ -73,6 +73,21 @@ function dataPolicy(sourceInventory) {
   };
 }
 
+function transformedDataPolicy(sourceInventory) {
+  return {
+    ...dataPolicy(sourceInventory),
+    contractVersion: 3,
+    restoreTransforms: [{
+      type: "null_orphan_reference",
+      table: "public.fuerzas_electorales",
+      column: "staging_id",
+      referencedTable: "public.staging_electoral_resultados",
+      referencedColumn: "resultado_staging_id",
+      reason: "Keep canonical rows while removing references to excluded transient staging rows.",
+    }],
+  };
+}
+
 function manifest() {
   return {
     manifestSha256: MANIFEST_SHA,
@@ -136,6 +151,35 @@ test("blocks dump planning when a new source table is not classified", async () 
       }),
     /fingerprint|missing/iu,
   );
+});
+
+test("appends the reviewed orphan-reference transform before hashing the artifact", async () => {
+  const sourceInventory = inventory();
+  const directory = await mkdtemp(path.join(os.tmpdir(), "dump-transform-"));
+  const plan = buildDumpPlan({
+    inventory: sourceInventory,
+    dataPolicy: transformedDataPolicy(sourceInventory),
+    artifactPath: path.join(directory, "territorial.sql"),
+  });
+  const bytes = "COPY public.fuerzas_electorales FROM stdin;\n1\n\\.\n";
+  const artifact = await createDataArtifact({
+    plan,
+    manifest: manifest(),
+    dependencies: {
+      dockerHealth: async () => ({ available: true, detail: "healthy" }),
+      runProcessOnce: async () => {
+        await writeFile(plan.temporaryPath, bytes, "utf8");
+        return { exitCode: 0, stdout: "dumped", stderr: "" };
+      },
+    },
+  });
+
+  const contents = await readFile(plan.artifactPath, "utf8");
+  assert.match(contents, /update\s+"public"\."fuerzas_electorales"/iu);
+  assert.match(contents, /set\s+"staging_id"\s*=\s*null/iu);
+  assert.match(contents, /not exists/iu);
+  assert.equal(artifact.sha256, createHash("sha256").update(contents).digest("hex"));
+  assert.equal(artifact.sizeBytes, Buffer.byteLength(contents));
 });
 
 test("blocks before spawning without Docker and creates an atomic hashed artifact", async () => {
@@ -429,4 +473,58 @@ test("classifies restore failure and never replays an unresolved data apply", as
   });
   assert.equal(journal.state, "FAILED_UNKNOWN");
   assert.equal(calls, 1);
+});
+
+test("allows only one concurrent process to claim the same data restore", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "restore-lock-"));
+  const artifactPath = path.join(directory, "territorial.sql");
+  const bytes = "select 1;\n";
+  await writeFile(artifactPath, bytes, "utf8");
+  const artifact = {
+    contractVersion: 1,
+    path: artifactPath,
+    sha256: createHash("sha256").update(bytes).digest("hex"),
+    sizeBytes: Buffer.byteLength(bytes),
+    manifestSha256: MANIFEST_SHA,
+    sourceProjectRef: SOURCE_PROJECT_REF,
+    lintEvidenceSha256: "f".repeat(64),
+  };
+  let releaseFirst;
+  let runners = 0;
+  const dependencies = {
+    persistJournal: async () => {},
+    getTargetConnection: async () => ({
+      projectRef: TARGET_PROJECT_REF,
+      env: {
+        PGHOST: `db.${TARGET_PROJECT_REF}.supabase.co`,
+        PGUSER: "postgres",
+        PGPASSWORD: "secret",
+      },
+    }),
+    runProcessOnce: async () => {
+      runners += 1;
+      if (runners === 1) await new Promise((resolve) => { releaseFirst = resolve; });
+      return { exitCode: 0, stdout: "restored", stderr: "" };
+    },
+  };
+
+  const first = restoreDataArtifactOnce({
+    artifact,
+    manifest: manifest(),
+    journal: schemaAppliedJournal(),
+    confirmation: `${MANIFEST_SHA}:DATA_APPLY`,
+    dependencies,
+  });
+  while (runners === 0) await new Promise((resolve) => setImmediate(resolve));
+  const second = restoreDataArtifactOnce({
+    artifact,
+    manifest: manifest(),
+    journal: schemaAppliedJournal(),
+    confirmation: `${MANIFEST_SHA}:DATA_APPLY`,
+    dependencies,
+  });
+  await assert.rejects(second, /already claimed|exclusive/iu);
+  releaseFirst();
+  assert.equal((await first).state, "DATA_APPLIED");
+  assert.equal(runners, 1);
 });

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { access, mkdir, rename, stat } from "node:fs/promises";
+import { access, appendFile, mkdir, open, rename, stat, unlink } from "node:fs/promises";
 import readline from "node:readline";
 import path from "node:path";
 
@@ -76,9 +76,41 @@ export function buildDumpPlan({ inventory, dataPolicy, artifactPath }) {
     include: classification.include,
     exclude: classification.exclude,
     preseeded: classification.preseeded,
+    restoreTransforms: classification.restoreTransforms,
     inventorySha256: classification.inventorySha256,
   };
   return { ...plan, planSha256: dumpPlanSha256(plan) };
+}
+
+function quoteIdentifier(value) {
+  return `"${String(value).replaceAll('"', '""')}"`;
+}
+
+function quoteQualifiedName(value) {
+  return String(value).split(".").map(quoteIdentifier).join(".");
+}
+
+function renderRestoreTransforms(transforms) {
+  if (!Array.isArray(transforms) || transforms.length === 0) return "";
+  return transforms.map((transform) => {
+    if (transform.type !== "null_orphan_reference") {
+      throw new Error(`Unsupported restore transform: ${String(transform.type)}`);
+    }
+    const table = quoteQualifiedName(transform.table);
+    const column = quoteIdentifier(transform.column);
+    const referencedTable = quoteQualifiedName(transform.referencedTable);
+    const referencedColumn = quoteIdentifier(transform.referencedColumn);
+    return [
+      "",
+      "-- Reviewed restore transform: preserve canonical rows and clear excluded provenance.",
+      `UPDATE ${table} AS target`,
+      `SET ${column} = NULL`,
+      `WHERE target.${column} IS NOT NULL`,
+      `  AND NOT EXISTS (SELECT 1 FROM ${referencedTable} AS referenced`,
+      `                  WHERE referenced.${referencedColumn} = target.${column});`,
+      "",
+    ].join("\n");
+  }).join("");
 }
 
 function normalizedIdentifier(value) {
@@ -183,6 +215,8 @@ export async function createDataArtifact({
   if (result?.exitCode !== 0) {
     throw new Error(`Data dump failed once: ${redactSensitiveText(result?.stderr || "unknown failure")}`);
   }
+  const transformSql = renderRestoreTransforms(plan.restoreTransforms);
+  if (transformSql) await appendFile(plan.temporaryPath, transformSql, "utf8");
   const metadata = await stat(plan.temporaryPath);
   if (!metadata.isFile() || metadata.size <= 0) {
     throw new Error("Data dump did not produce a non-empty temporary artifact");
@@ -349,19 +383,31 @@ export async function restoreDataArtifactOnce({
     throw new Error(`Data restoration cannot start from ${journal.state}`);
   }
 
-  if (typeof dependencies.getTargetConnection !== "function") {
-    throw new Error("Target connection must be supplied by the operating-system secret provider");
+  const lockPath = `${artifact.path}.apply.lock`;
+  let lock;
+  try {
+    lock = await open(lockPath, "wx");
+  } catch (error) {
+    if (error?.code === "EEXIST") {
+      throw new Error("Data restoration is already claimed by an exclusive process");
+    }
+    throw error;
   }
-  const connection = await dependencies.getTargetConnection({
-    projectRef: manifest.target.projectRef,
-  });
-  assertTargetConnectionIdentity(connection, manifest.target.projectRef);
-  const applying = transitionJournal(journal, {
-    to: "DATA_APPLYING",
-    evidenceSha256: artifact.sha256,
-  });
-  await persist(dependencies.persistJournal, applying);
-  const psqlArgs = [
+
+  try {
+    if (typeof dependencies.getTargetConnection !== "function") {
+      throw new Error("Target connection must be supplied by the operating-system secret provider");
+    }
+    const connection = await dependencies.getTargetConnection({
+      projectRef: manifest.target.projectRef,
+    });
+    assertTargetConnectionIdentity(connection, manifest.target.projectRef);
+    const applying = transitionJournal(journal, {
+      to: "DATA_APPLYING",
+      evidenceSha256: artifact.sha256,
+    });
+    await persist(dependencies.persistJournal, applying);
+    const psqlArgs = [
     "--single-transaction",
     "--set",
     "ON_ERROR_STOP=on",
@@ -370,12 +416,12 @@ export async function restoreDataArtifactOnce({
     "--file",
     CONTAINER_ARTIFACT_PATH,
   ];
-  assertSafeOperation({
+    assertSafeOperation({
     phase: "data-apply",
     projectRef: manifest.target.projectRef,
     args: psqlArgs,
   });
-  const args = [
+    const args = [
     "run",
     "--rm",
     "--network",
@@ -398,44 +444,50 @@ export async function restoreDataArtifactOnce({
     "psql",
     ...psqlArgs,
   ];
-  const runner = dependencies.runProcessOnce ?? runProcessOnce;
-  const sensitiveValues = Object.values(connection.env).filter(
+    const runner = dependencies.runProcessOnce ?? runProcessOnce;
+    const sensitiveValues = Object.values(connection.env).filter(
     (value) => typeof value === "string" && value.length > 0,
   );
-  let result;
-  try {
-    result = await runner({
+    let result;
+    try {
+      result = await runner({
       command: "docker",
       args,
       env: connection.env,
       sensitiveValues,
     });
-  } catch (error) {
-    result = {
+    } catch (error) {
+      result = {
       exitCode: null,
       stdout: "",
       stderr: redactSensitiveText(error?.message ?? String(error), sensitiveValues),
       errorCode: "RUNNER_ERROR",
     };
-  }
-  let transitionEvidence = processEvidence(result, sensitiveValues);
-  if (result?.exitCode !== 0) {
-    const failure = normalizeProcessFailure({
+    }
+    let transitionEvidence = processEvidence(result, sensitiveValues);
+    if (result?.exitCode !== 0) {
+      const failure = normalizeProcessFailure({
       phase: "data-apply",
       result,
       sensitiveValues,
     });
-    const persistFailure = dependencies.persistFailureEvidence ?? persistFailureEvidence;
-    const saved = await persistFailure(path.join(path.dirname(artifact.path), "failure.json"), failure);
-    transitionEvidence = saved.sha256;
-  }
-  const next = transitionJournal(applying, {
+      const persistFailure = dependencies.persistFailureEvidence ?? persistFailureEvidence;
+      const saved = await persistFailure(path.join(path.dirname(artifact.path), "failure.json"), failure);
+      transitionEvidence = saved.sha256;
+    }
+    const next = transitionJournal(applying, {
     to: result?.exitCode === 0
       ? "DATA_APPLIED"
       : Number.isInteger(result?.exitCode)
         ? "FAILED_CONFIRMED"
         : "FAILED_UNKNOWN",
     evidenceSha256: transitionEvidence,
-  });
-  return persist(dependencies.persistJournal, next);
+    });
+    return persist(dependencies.persistJournal, next);
+  } finally {
+    await lock.close();
+    await unlink(lockPath).catch((error) => {
+      if (error?.code !== "ENOENT") throw error;
+    });
+  }
 }
