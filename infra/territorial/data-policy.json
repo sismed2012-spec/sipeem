@@ -98,6 +98,7 @@
       "column": "resultado_staging_id",
       "referencedTable": "public.staging_electoral_resultados",
       "referencedColumn": "resultado_staging_id",
+      "nullable": true,
       "reason": "Preserve every canonical official-force result while clearing only provenance pointers whose transient staging rows are intentionally excluded."
     }
   ],

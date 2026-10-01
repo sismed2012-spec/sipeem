@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { SOURCE_PROJECT_REF, TARGET_PROJECT_REF } from "./policy.mjs";
 import {
+  buildNativeAdvisorInvocation,
   classifyDataRestoreProbe,
   parsePromotionArgs,
   resolveFrozenDataPolicy,
@@ -214,15 +215,13 @@ test("maps confirmed failure to 1 and does not expose a retry field", async () =
   assert.doesNotMatch(JSON.stringify(result), /secret/iu);
 });
 
-test("binds recovery data planning to the immutable predecessor policy", async () => {
-  const predecessorPolicy = { contractVersion: 3, marker: "frozen" };
+test("binds recovery data planning to the immutable recovery policy", async () => {
   const currentPolicy = { contractVersion: 3, marker: "mutable" };
   const recovery = recoveryManifest({ dataPolicy: currentPolicy });
-  const resolved = await resolveFrozenDataPolicy(recovery, async (hash) => {
-    assert.equal(hash, recovery.recovery.predecessorManifestSha256);
-    return { predecessorManifest: { dataPolicy: predecessorPolicy } };
+  const resolved = await resolveFrozenDataPolicy(recovery, async () => {
+    throw new Error("must not load predecessor");
   });
-  assert.equal(resolved, predecessorPolicy);
+  assert.equal(resolved, currentPolicy);
   assert.equal(await resolveFrozenDataPolicy(manifest({ dataPolicy: currentPolicy }), async () => {
     throw new Error("must not load predecessor");
   }), currentPolicy);
@@ -230,15 +229,50 @@ test("binds recovery data planning to the immutable predecessor policy", async (
 
 test("classifies interrupted data restores from an exact read-only postflight", () => {
   const expectations = { sections: 7052, municipalities: 125 };
+  const expectedDataPolicy = {
+    expectedSources: { demographic: [], nominal: [] },
+    expectedGeometries: { srids: [4326], nullGeometries: 0, invalidGeometries: 0 },
+    expectedCorrespondences: { eceg: {}, nominal: {} },
+  };
+  const report = {
+    contractVersion: 1,
+    kind: "promotion_postflight",
+    counts: expectations,
+    sources: expectedDataPolicy.expectedSources,
+    geometries: expectedDataPolicy.expectedGeometries,
+    correspondences: expectedDataPolicy.expectedCorrespondences,
+    rpc: { missing: [] },
+    security: { rlsViolations: [], privilegeViolations: [], functionViolations: [] },
+    operationalObjects: [],
+    traceability: { orphanedResultadoStagingReferences: 0, nonNullResultadoStagingReferences: 0 },
+  };
   const complete = classifyDataRestoreProbe({
-    report: { contractVersion: 1, kind: "promotion_postflight", counts: expectations },
+    report,
     expectations,
+    expectedDataPolicy,
   });
   const partial = classifyDataRestoreProbe({
-    report: { contractVersion: 1, kind: "promotion_postflight", counts: { ...expectations, sections: 7000 } },
+    report: { ...report, counts: { ...expectations, sections: 7000 } },
     expectations,
+    expectedDataPolicy,
+  });
+  const orphaned = classifyDataRestoreProbe({
+    report: { ...report, traceability: { ...report.traceability, orphanedResultadoStagingReferences: 1 } },
+    expectations,
+    expectedDataPolicy,
   });
   assert.equal(complete.status, "COMPLETE");
   assert.equal(partial.status, "PARTIAL");
+  assert.equal(orphaned.status, "PARTIAL");
   assert.match(complete.evidenceSha256, /^[a-f0-9]{64}$/u);
+});
+
+test("pins native advisors to the territorial workdir and exact target", () => {
+  const invocation = buildNativeAdvisorInvocation(TARGET_PROJECT_REF);
+  assert.ok(invocation.args.includes("--workdir"));
+  assert.ok(invocation.args.includes("infra/territorial"));
+  assert.equal(invocation.args.filter((value) => value === "--project-ref").length, 1);
+  assert.ok(invocation.args.includes(TARGET_PROJECT_REF));
+  assert.ok(invocation.args.includes("advisors"));
+  assert.ok(invocation.args.includes("--linked"));
 });

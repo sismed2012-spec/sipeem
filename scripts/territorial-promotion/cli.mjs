@@ -98,29 +98,51 @@ function sha256(value) {
 }
 
 export async function resolveFrozenDataPolicy(manifest, loadPredecessor) {
-  if (manifest?.contractVersion === 2) {
-    const loaded = await loadPredecessor(manifest.recovery?.predecessorManifestSha256);
-    if (!loaded?.predecessorManifest?.dataPolicy) {
-      throw new Error("Recovery predecessor data policy is unavailable");
-    }
-    return loaded.predecessorManifest.dataPolicy;
-  }
+  void loadPredecessor;
   if (!manifest?.dataPolicy) throw new Error("Manifest data policy is unavailable");
   return manifest.dataPolicy;
 }
 
-export function classifyDataRestoreProbe({ report, expectations }) {
+function canonicalize(value) {
+  if (Array.isArray(value)) return value.map(canonicalize);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonicalize(value[key])]));
+  }
+  return value;
+}
+
+function exactValue(actual, expected) {
+  return JSON.stringify(canonicalize(actual)) === JSON.stringify(canonicalize(expected));
+}
+
+export function classifyDataRestoreProbe({ report, expectations, expectedDataPolicy }) {
   if (report?.contractVersion !== 1 || report?.kind !== "promotion_postflight") {
     throw new Error("Data-state probe returned an invalid postflight report");
   }
-  const actualKeys = Object.keys(report.counts ?? {}).sort();
-  const expectedKeys = Object.keys(expectations ?? {}).sort();
-  const exact = JSON.stringify(actualKeys) === JSON.stringify(expectedKeys) &&
-    expectedKeys.every((key) => report.counts[key] === expectations[key]);
+  const exact = exactValue(report.counts, expectations) &&
+    exactValue(report.sources, expectedDataPolicy?.expectedSources) &&
+    exactValue(report.geometries, expectedDataPolicy?.expectedGeometries) &&
+    exactValue(report.correspondences, expectedDataPolicy?.expectedCorrespondences) &&
+    Array.isArray(report.rpc?.missing) && report.rpc.missing.length === 0 &&
+    ["rlsViolations", "privilegeViolations", "functionViolations"].every(
+      (field) => Array.isArray(report.security?.[field]) && report.security[field].length === 0,
+    ) &&
+    Array.isArray(report.operationalObjects) && report.operationalObjects.length === 0 &&
+    report.traceability?.orphanedResultadoStagingReferences === 0 &&
+    report.traceability?.nonNullResultadoStagingReferences === 0;
   const status = exact
     ? "COMPLETE"
     : "PARTIAL";
   return { status, evidenceSha256: sha256({ report, expectations, status }) };
+}
+
+export function buildNativeAdvisorInvocation(projectRef) {
+  const args = [
+    "db", "advisors", "--linked",
+    "--type", "all", "--level", "error", "--fail-on", "error", "-o", "json",
+  ];
+  assertSafeOperation({ phase: "verify", projectRef, args });
+  return buildSupabaseInvocation({ args, projectRef });
 }
 
 async function runGit(repoRoot, args) {
@@ -253,11 +275,8 @@ function createDefaultDependencies(repoRoot = process.cwd()) {
     return runProcessOnce({ ...invocation, cwd: repoRoot });
   };
   const queryNativeAdvisors = async ({ projectRef }) => {
-    const args = [
-      "db", "advisors", "--linked", "--project-ref", projectRef,
-      "--type", "all", "--level", "error", "--fail-on", "error", "-o", "json",
-    ];
-    const result = await runProcessOnce({ command: "npm.cmd", args: ["exec", "supabase", "--", ...args], cwd: repoRoot });
+    const invocation = buildNativeAdvisorInvocation(projectRef);
+    const result = await runProcessOnce({ ...invocation, cwd: repoRoot });
     if (result.exitCode !== 0) {
       throw new Error(`Native Supabase advisors BLOCKED: ${result.stderr || result.stdout}`);
     }
@@ -438,6 +457,7 @@ function createDefaultDependencies(repoRoot = process.cwd()) {
         confirmation,
         dependencies: {
           persistJournal: (value) => saveJournalAtomically(paths.journal, value),
+          reloadJournal: () => loadExistingJournal(paths.journal, manifest),
           getTargetConnection: async () => ({
             projectRef: TARGET_PROJECT_REF,
             env: {
@@ -455,9 +475,13 @@ function createDefaultDependencies(repoRoot = process.cwd()) {
               sqlFile: "infra/territorial/supabase/tests/promotion_postflight.sql",
             });
             if (result.exitCode !== 0) throw new Error(`Data-state probe BLOCKED: ${result.stderr}`);
+            const expectedDataPolicy = activeManifest.contractVersion === 2
+              ? (await loadPredecessor(activeManifest.recovery.predecessorManifestSha256)).predecessorManifest.dataPolicy
+              : activeManifest.dataPolicy;
             return classifyDataRestoreProbe({
               report: unwrapQueryReport(result.stdout, "promotion_postflight"),
               expectations: activeManifest.expectations,
+              expectedDataPolicy,
             });
           },
         },
@@ -491,6 +515,7 @@ function createDefaultDependencies(repoRoot = process.cwd()) {
         repoRoot,
         dependencies: {
           expectedDataPolicy,
+          expectedPreseededPolicy: manifest.dataPolicy,
           queryProject: ({ projectRef }) => queryProjectSql({
             projectRef,
             sqlFile: "infra/territorial/supabase/tests/promotion_postflight.sql",

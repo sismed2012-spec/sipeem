@@ -74,7 +74,7 @@ function dataPolicy(sourceInventory) {
 }
 
 function transformedDataPolicy(sourceInventory) {
-  return {
+  const policy = {
     ...dataPolicy(sourceInventory),
     contractVersion: 3,
     restoreTransforms: [{
@@ -83,9 +83,21 @@ function transformedDataPolicy(sourceInventory) {
       column: "staging_id",
       referencedTable: "public.staging_electoral_resultados",
       referencedColumn: "resultado_staging_id",
+      nullable: true,
       reason: "Keep canonical rows while removing references to excluded transient staging rows.",
     }],
   };
+  policy.exclude = policy.exclude.map((entry) => entry.table === "public.staging_electoral_resultados"
+    ? {
+        ...entry,
+        documentedIncomingDependencies: [{
+          fromTable: "public.fuerzas_electorales",
+          constraint: "fuerzas_staging_fk",
+          reason: "The transient provenance pointer is cleared during the reviewed restore.",
+        }],
+      }
+    : entry);
+  return policy;
 }
 
 function manifest() {
@@ -155,6 +167,12 @@ test("blocks dump planning when a new source table is not classified", async () 
 
 test("appends the reviewed orphan-reference transform before hashing the artifact", async () => {
   const sourceInventory = inventory();
+  sourceInventory.foreignKeys = [{
+    name: "fuerzas_staging_fk",
+    fromTable: "public.fuerzas_electorales",
+    toTable: "public.staging_electoral_resultados",
+    columns: [{ from: "staging_id", to: "resultado_staging_id" }],
+  }];
   const directory = await mkdtemp(path.join(os.tmpdir(), "dump-transform-"));
   const plan = buildDumpPlan({
     inventory: sourceInventory,
@@ -319,6 +337,7 @@ test("restores once with credentials only in the child environment", async () =>
     confirmation: `${MANIFEST_SHA}:DATA_APPLY`,
     dependencies: {
       persistJournal: async (journal) => persisted.push(structuredClone(journal)),
+      reloadJournal: async () => schemaAppliedJournal(),
       getTargetConnection: async () => ({
         projectRef: TARGET_PROJECT_REF,
         env: {
@@ -398,6 +417,7 @@ test("rejects a database endpoint that is not bound to the target project", asyn
       confirmation: `${MANIFEST_SHA}:DATA_APPLY`,
       dependencies: {
         persistJournal: async (journal) => persisted.push(journal),
+        reloadJournal: async () => schemaAppliedJournal(),
         getTargetConnection: async () => ({
           projectRef: TARGET_PROJECT_REF,
           env: {
@@ -442,6 +462,7 @@ test("classifies restore failure and never replays an unresolved data apply", as
     confirmation: `${MANIFEST_SHA}:DATA_APPLY`,
     dependencies: {
       persistJournal: async () => {},
+      reloadJournal: async () => schemaAppliedJournal(),
       getTargetConnection: async () => ({
         projectRef: TARGET_PROJECT_REF,
         env: {
@@ -491,8 +512,10 @@ test("allows only one concurrent process to claim the same data restore", async 
   };
   let releaseFirst;
   let runners = 0;
+  let durableJournal = schemaAppliedJournal();
   const dependencies = {
-    persistJournal: async () => {},
+    persistJournal: async (value) => { durableJournal = structuredClone(value); },
+    reloadJournal: async () => structuredClone(durableJournal),
     getTargetConnection: async () => ({
       projectRef: TARGET_PROJECT_REF,
       env: {
@@ -526,5 +549,51 @@ test("allows only one concurrent process to claim the same data restore", async 
   await assert.rejects(second, /already claimed|exclusive/iu);
   releaseFirst();
   assert.equal((await first).state, "DATA_APPLIED");
+  assert.equal(runners, 1);
+});
+
+test("rejects a delayed stale claim after another process completed the restore", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "restore-stale-"));
+  const artifactPath = path.join(directory, "territorial.sql");
+  const bytes = "select 1;\n";
+  await writeFile(artifactPath, bytes, "utf8");
+  const artifact = {
+    contractVersion: 1,
+    path: artifactPath,
+    sha256: createHash("sha256").update(bytes).digest("hex"),
+    sizeBytes: Buffer.byteLength(bytes),
+    manifestSha256: MANIFEST_SHA,
+    sourceProjectRef: SOURCE_PROJECT_REF,
+    lintEvidenceSha256: "f".repeat(64),
+  };
+  const stale = schemaAppliedJournal();
+  let durable = stale;
+  let runners = 0;
+  const dependencies = {
+    persistJournal: async (value) => { durable = structuredClone(value); },
+    reloadJournal: async () => structuredClone(durable),
+    getTargetConnection: async () => ({
+      projectRef: TARGET_PROJECT_REF,
+      env: { PGHOST: `db.${TARGET_PROJECT_REF}.supabase.co`, PGUSER: "postgres", PGPASSWORD: "secret" },
+    }),
+    runProcessOnce: async () => {
+      runners += 1;
+      return { exitCode: 0, stdout: "restored", stderr: "" };
+    },
+  };
+  assert.equal((await restoreDataArtifactOnce({
+    artifact,
+    manifest: manifest(),
+    journal: stale,
+    confirmation: `${MANIFEST_SHA}:DATA_APPLY`,
+    dependencies,
+  })).state, "DATA_APPLIED");
+  assert.equal((await restoreDataArtifactOnce({
+    artifact,
+    manifest: manifest(),
+    journal: stale,
+    confirmation: `${MANIFEST_SHA}:DATA_APPLY`,
+    dependencies,
+  })).state, "DATA_APPLIED");
   assert.equal(runners, 1);
 });

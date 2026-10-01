@@ -232,7 +232,8 @@ export async function verifyPromotion({
   else if (issues.length === 0) issues.push(issue("POSTFLIGHT_FAILED", "No postflight report"));
 
   const expectedDataPolicy = dependencies.expectedDataPolicy ?? manifest.dataPolicy;
-  if (Array.isArray(expectedDataPolicy?.preseeded) && expectedDataPolicy.preseeded.length > 0) {
+  const expectedPreseededPolicy = dependencies.expectedPreseededPolicy ?? expectedDataPolicy;
+  if (Array.isArray(expectedPreseededPolicy?.preseeded) && expectedPreseededPolicy.preseeded.length > 0) {
     if (typeof dependencies.queryPreseeded !== "function") {
       issues.push(issue("PRESEEDED_PROBE_MISSING", "Source and target preseeded parity is required"));
     } else {
@@ -247,7 +248,7 @@ export async function verifyPromotion({
         preseeded = comparePreseededReports({
           source: parsePreseededReport(queried.source.stdout),
           target: parsePreseededReport(queried.target.stdout),
-          expectedTables: expectedDataPolicy.preseeded,
+          expectedTables: expectedPreseededPolicy.preseeded,
         });
         issues.push(...preseeded.issues.map((entry) => issue(`PRESEEDED_${entry.code}`, entry.detail)));
       } catch (error) {

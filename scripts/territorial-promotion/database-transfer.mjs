@@ -395,6 +395,15 @@ export async function restoreDataArtifactOnce({
   }
 
   try {
+    if (typeof dependencies.reloadJournal !== "function") {
+      throw new Error("Data restoration requires a durable journal reload after claiming exclusivity");
+    }
+    const durableJournal = await dependencies.reloadJournal();
+    validateJournal(durableJournal, journalIdentity(manifest));
+    if (durableJournal.state === "DATA_APPLIED") return durableJournal;
+    if (durableJournal.state !== journal.state) {
+      throw new Error(`Data restoration rejected a stale exclusive claim from ${journal.state} to ${durableJournal.state}`);
+    }
     if (typeof dependencies.getTargetConnection !== "function") {
       throw new Error("Target connection must be supplied by the operating-system secret provider");
     }

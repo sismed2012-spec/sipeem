@@ -306,10 +306,20 @@ test("requires an exact null-orphan transform for included references to exclude
     column: "staging_id",
     referencedTable: "public.staging_electoral_resultados",
     referencedColumn: "resultado_staging_id",
+    nullable: true,
     reason: "Preserve the canonical row and clear only excluded provenance.",
   });
   const reviewed = classifySourceTables({ inventory: sourceInventory, dataPolicy: base });
   assert.equal(reviewed.restoreTransforms.length, 1);
+  const extra = structuredClone(base);
+  extra.restoreTransforms.push({
+    ...extra.restoreTransforms[0],
+    column: "unreviewed_pointer",
+  });
+  assert.throws(
+    () => classifySourceTables({ inventory: sourceInventory, dataPolicy: extra }),
+    /unmatched|one-to-one|restore transform/iu,
+  );
 });
 
 test("pins the reviewed SIPEEM-DEV inventory policy", async () => {
@@ -336,10 +346,11 @@ test("pins the reviewed SIPEEM-DEV inventory policy", async () => {
     ],
   );
   assert.ok(reviewed.include.some(({ table }) => table === "public.fuerzas_electorales"));
-  assert.deepEqual(reviewed.restoreTransforms.map(({ type, table, column }) => ({ type, table, column })), [{
+  assert.deepEqual(reviewed.restoreTransforms.map(({ type, table, column, nullable }) => ({ type, table, column, nullable })), [{
     type: "null_orphan_reference",
     table: "public.resultados_municipales_oficiales_fuerzas",
     column: "resultado_staging_id",
+    nullable: true,
   }]);
   const names = [...reviewed.include, ...reviewed.exclude, ...reviewed.preseeded]
     .map(({ table }) => table);

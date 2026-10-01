@@ -121,6 +121,9 @@ function validateRestoreTransform(transform) {
   if (typeof transform.reason !== "string" || transform.reason.trim().length < 10) {
     throw new Error("Every restore transform requires an exact reason");
   }
+  if (transform.nullable !== true) {
+    throw new Error("A null-orphan restore transform must explicitly review the source column as nullable");
+  }
   return structuredClone(transform);
 }
 
@@ -225,6 +228,24 @@ export function classifySourceTables({ inventory, dataPolicy }) {
       throw new Error(
         `Foreign key ${foreignKey.name} crosses preseeded ${foreignKey.fromTable} to ${foreignKey.toTable}`,
       );
+    }
+  }
+
+  if (dataPolicy.contractVersion === 3) {
+    const crossingForeignKeys = inventory.foreignKeys.filter((foreignKey) =>
+      classified.get(foreignKey.fromTable)?.category === "include" &&
+      classified.get(foreignKey.toTable)?.category === "exclude");
+    if (restoreTransforms.length !== crossingForeignKeys.length) {
+      throw new Error("Restore transforms must have a one-to-one mapping to reviewed included-to-excluded foreign keys");
+    }
+    const seenTransforms = new Set();
+    for (const transform of restoreTransforms) {
+      const identity = `${transform.table}.${transform.column}->${transform.referencedTable}.${transform.referencedColumn}`;
+      if (seenTransforms.has(identity)) throw new Error(`Duplicate restore transform: ${identity}`);
+      seenTransforms.add(identity);
+      if (crossingForeignKeys.filter((foreignKey) => transformMatchesForeignKey(transform, foreignKey)).length !== 1) {
+        throw new Error(`Unmatched restore transform: ${identity}`);
+      }
     }
   }
 

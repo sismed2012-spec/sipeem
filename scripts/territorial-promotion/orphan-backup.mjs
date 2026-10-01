@@ -23,6 +23,13 @@ async function exists(filePath) {
 }
 
 export async function collectOrphanReferenceBackup({ client, capturedAt = new Date().toISOString() }) {
+  const staging = await client
+    .from("staging_electoral_resultados")
+    .select("resultado_staging_id", { count: "exact", head: true });
+  if (staging.error) throw new Error(`Staging scope query failed: ${staging.error.message}`);
+  if (staging.count !== 0) {
+    throw new Error(`Backup requires empty staging, received ${String(staging.count)} rows`);
+  }
   const rows = [];
   for (let from = 0; ; from += PAGE_SIZE) {
     const { data, error } = await client
@@ -49,6 +56,7 @@ export async function collectOrphanReferenceBackup({ client, capturedAt = new Da
     capturedAt,
     rowCount: rows.length,
     rowsSha256,
+    scopeGuard: { stagingRows: 0, selection: "all non-null pointers are orphaned" },
     rows,
   };
 }
