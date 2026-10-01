@@ -118,8 +118,8 @@ function parsePreseededQuery(result, label, issues) {
 }
 
 function validateIdentity(report, targetRef, issues) {
-  if (report.projectRef !== targetRef) {
-    issues.push(issue("PROJECT_IDENTITY_MISMATCH", report.projectRef ?? "missing project reference"));
+  if (report.projectRef && report.projectRef !== targetRef) {
+    issues.push(issue("PROJECT_IDENTITY_MISMATCH", report.projectRef));
   }
   if (
     report.identity?.database !== "postgres" ||

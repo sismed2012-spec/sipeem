@@ -165,6 +165,27 @@ test("passes only the exact adopted schema, empty canonical tables, and preseede
   assert.equal(deps.calls.write, 0);
 });
 
+test("accepts an unavailable SQL project setting but blocks an explicit target mismatch", async () => {
+  const unavailable = dependencies({ reports: { identity: identityReport({ projectRef: null }) } });
+  const passed = await runRecoveryPreflight({
+    manifest: manifest(),
+    migrationDir: "infra/territorial/supabase/migrations",
+    exceptions: [],
+    dependencies: unavailable,
+  });
+  assert.equal(passed.status, "PASSED");
+
+  const mismatch = dependencies({ reports: { identity: identityReport({ projectRef: SOURCE_PROJECT_REF }) } });
+  const blocked = await runRecoveryPreflight({
+    manifest: manifest(),
+    migrationDir: "infra/territorial/supabase/migrations",
+    exceptions: [],
+    dependencies: mismatch,
+  });
+  assert.equal(blocked.status, "BLOCKED");
+  assert.ok(blocked.issues.some(({ code }) => code === "PROJECT_IDENTITY_MISMATCH"));
+});
+
 test("blocks every schema-adoption failure class without a database write", async () => {
   const cases = [
     ["missing migration", { schema: schemaReport({ migrationVersions: VERSIONS.slice(1) }) }, "MIGRATION_HISTORY_MISMATCH"],
