@@ -17,6 +17,7 @@ const EXPECTATION_TABLES = {
   ecegSections: "demografia_eceg_secciones",
   nominalRows: "lista_nominal_secciones",
 };
+const POSTGRES_CLIENT_IMAGE = "public.ecr.aws/supabase/postgres:17.11.0.002";
 
 function issue(code, detail, scope = "schema") {
   return { code, detail, scope };
@@ -59,8 +60,15 @@ async function defaultDockerHealth() {
   };
 }
 
+export function buildPsqlHealthInvocation() {
+  return {
+    command: "docker",
+    args: ["run", "--rm", POSTGRES_CLIENT_IMAGE, "psql", "--version"],
+  };
+}
+
 async function defaultPsqlHealth() {
-  const result = await runProcessOnce({ command: "psql", args: ["--version"] });
+  const result = await runProcessOnce(buildPsqlHealthInvocation());
   return {
     available: result.exitCode === 0,
     detail: result.exitCode === 0 ? result.stdout.trim() : result.stderr.trim(),

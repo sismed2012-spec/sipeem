@@ -13,6 +13,8 @@ import {
 import { redactSensitiveText, runProcessOnce } from "./process.mjs";
 
 const SHA256 = /^[a-f0-9]{64}$/u;
+const POSTGRES_CLIENT_IMAGE = "public.ecr.aws/supabase/postgres:17.11.0.002";
+const CONTAINER_ARTIFACT_PATH = "/transfer/territorial-data.sql";
 
 function canonicalize(value) {
   if (Array.isArray(value)) return value.map(canonicalize);
@@ -288,32 +290,58 @@ export async function restoreDataArtifactOnce({
     evidenceSha256: artifact.sha256,
   });
   await persist(dependencies.persistJournal, applying);
-  const args = [
+  const psqlArgs = [
     "--single-transaction",
     "--set",
     "ON_ERROR_STOP=on",
     "--file",
-    artifact.path,
+    CONTAINER_ARTIFACT_PATH,
   ];
   assertSafeOperation({
     phase: "data-apply",
     projectRef: manifest.target.projectRef,
-    args,
+    args: psqlArgs,
   });
+  const args = [
+    "run",
+    "--rm",
+    "--network",
+    "host",
+    "-e",
+    "PGHOST",
+    "-e",
+    "PGPORT",
+    "-e",
+    "PGUSER",
+    "-e",
+    "PGDATABASE",
+    "-e",
+    "PGPASSWORD",
+    "-e",
+    "PGSSLMODE",
+    "--mount",
+    `type=bind,source=${artifact.path},target=${CONTAINER_ARTIFACT_PATH},readonly`,
+    POSTGRES_CLIENT_IMAGE,
+    "psql",
+    ...psqlArgs,
+  ];
   const runner = dependencies.runProcessOnce ?? runProcessOnce;
+  const sensitiveValues = Object.values(connection.env).filter(
+    (value) => typeof value === "string" && value.length > 0,
+  );
   let result;
   try {
     result = await runner({
-      command: "psql",
+      command: "docker",
       args,
       env: connection.env,
-      sensitiveValues: Object.values(connection.env),
+      sensitiveValues,
     });
   } catch (error) {
     result = {
       exitCode: null,
       stdout: "",
-      stderr: redactSensitiveText(error?.message ?? String(error), Object.values(connection.env)),
+      stderr: redactSensitiveText(error?.message ?? String(error), sensitiveValues),
       errorCode: "RUNNER_ERROR",
     };
   }
@@ -323,7 +351,7 @@ export async function restoreDataArtifactOnce({
       : Number.isInteger(result?.exitCode)
         ? "FAILED_CONFIRMED"
         : "FAILED_UNKNOWN",
-    evidenceSha256: processEvidence(result, Object.values(connection.env)),
+    evidenceSha256: processEvidence(result, sensitiveValues),
   });
   return persist(dependencies.persistJournal, next);
 }

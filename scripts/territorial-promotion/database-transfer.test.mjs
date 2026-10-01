@@ -221,12 +221,33 @@ test("restores once with credentials only in the child environment", async () =>
 
   assert.equal(result.state, "DATA_APPLIED");
   assert.deepEqual(persisted.map(({ state }) => state), ["DATA_APPLYING", "DATA_APPLIED"]);
+  assert.equal(invocation.command, "docker");
   assert.deepEqual(invocation.args, [
+    "run",
+    "--rm",
+    "--network",
+    "host",
+    "-e",
+    "PGHOST",
+    "-e",
+    "PGPORT",
+    "-e",
+    "PGUSER",
+    "-e",
+    "PGDATABASE",
+    "-e",
+    "PGPASSWORD",
+    "-e",
+    "PGSSLMODE",
+    "--mount",
+    `type=bind,source=${artifactPath},target=/transfer/territorial-data.sql,readonly`,
+    "public.ecr.aws/supabase/postgres:17.11.0.002",
+    "psql",
     "--single-transaction",
     "--set",
     "ON_ERROR_STOP=on",
     "--file",
-    artifactPath,
+    "/transfer/territorial-data.sql",
   ]);
   assert.equal(invocation.env.PGPASSWORD, "top-secret");
   assert.doesNotMatch(invocation.args.join(" "), /top-secret|postgresql:\/\//iu);

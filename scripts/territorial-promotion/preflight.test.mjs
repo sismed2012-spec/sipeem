@@ -6,6 +6,7 @@ import {
   parsePreflightReport,
   runReadOnlyPreflight,
 } from "./preflight.mjs";
+import * as preflightModule from "./preflight.mjs";
 import { SOURCE_PROJECT_REF, TARGET_PROJECT_REF } from "./policy.mjs";
 
 const EXPECTATIONS = {
@@ -181,6 +182,20 @@ test("serializes the two Supabase probes for one project", async () => {
 
   assert.equal(result.schemaSimulation.status, "PASSED");
   assert.equal(maxInFlight, 1);
+});
+
+test("checks the PostgreSQL 17 client through the approved Docker image", () => {
+  assert.equal(typeof preflightModule.buildPsqlHealthInvocation, "function");
+  assert.deepEqual(preflightModule.buildPsqlHealthInvocation(), {
+    command: "docker",
+    args: [
+      "run",
+      "--rm",
+      "public.ecr.aws/supabase/postgres:17.11.0.002",
+      "psql",
+      "--version",
+    ],
+  });
 });
 
 test("blocks a source whose territorial objects or manifest counts drift", async () => {
