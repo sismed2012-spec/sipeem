@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-import { createJournal, transitionJournal } from "./journal.mjs";
+import { createJournal, createRecoveryJournal, transitionJournal } from "./journal.mjs";
 import { SOURCE_PROJECT_REF, TARGET_PROJECT_REF } from "./policy.mjs";
 import { verifyPromotion } from "./verification.mjs";
 
@@ -81,6 +81,28 @@ function dataAppliedJournal() {
   return journal;
 }
 
+function blockedRecoveryJournal() {
+  let journal = createRecoveryJournal({
+    manifestSha256: MANIFEST_SHA,
+    sourceCommit: SOURCE_COMMIT,
+    sourceRef: SOURCE_PROJECT_REF,
+    targetRef: TARGET_PROJECT_REF,
+    predecessorManifestSha256: "f".repeat(64),
+  });
+  for (const to of [
+    "PREFLIGHT_PASSED",
+    "SCHEMA_ADOPTING",
+    "SCHEMA_APPLIED",
+    "DATA_APPLYING",
+    "DATA_APPLIED",
+    "VERIFYING",
+    "BLOCKED",
+  ]) {
+    journal = transitionJournal(journal, { to, evidenceSha256: EVIDENCE_SHA });
+  }
+  return journal;
+}
+
 function dependencies(value = report(), advisors = { securityCritical: 0, performanceCritical: 0 }) {
   const persisted = [];
   return {
@@ -152,6 +174,29 @@ test("blocks critical Supabase advisors and probe failures", async () => {
   });
   assert.equal(failure.status, "BLOCKED");
   assert.doesNotMatch(JSON.stringify(failure), /hunter2/iu);
+});
+
+test("resumes a blocked recovery verification using immutable predecessor expectations", async () => {
+  const recovery = {
+    ...manifest(),
+    contractVersion: 2,
+    mode: "DATA_RECOVERY",
+    recovery: { predecessorManifestSha256: "f".repeat(64) },
+    dataPolicy: { contractVersion: 2, include: [], exclude: [], preseeded: [] },
+  };
+  const deps = dependencies();
+  deps.expectedDataPolicy = manifest().dataPolicy;
+  const result = await verifyPromotion({
+    manifest: recovery,
+    projectRef: TARGET_PROJECT_REF,
+    journal: blockedRecoveryJournal(),
+    dependencies: deps,
+  });
+
+  assert.equal(result.status, "PASSED");
+  assert.equal(result.journal.state, "VERIFIED");
+  assert.deepEqual(deps.persisted.map(({ state }) => state), ["VERIFIED"]);
+  assert.equal(result.journal.entries.at(-1).probeResolution, "verification-reprobe:complete");
 });
 
 test("ships a single read-only integral postflight", async () => {

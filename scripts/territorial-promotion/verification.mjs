@@ -74,24 +74,24 @@ function compareExact(actual, expected, code, issues) {
   }
 }
 
-function validateReport(report, manifest, advisors) {
+function validateReport(report, manifest, advisors, expectedDataPolicy) {
   const issues = [];
   compareExact(report.counts, manifest.expectations, "COUNT_MISMATCH", issues);
   compareExact(
     report.sources,
-    manifest.dataPolicy?.expectedSources,
+    expectedDataPolicy?.expectedSources,
     "SOURCE_STATE_MISMATCH",
     issues,
   );
   compareExact(
     report.geometries,
-    manifest.dataPolicy?.expectedGeometries,
+    expectedDataPolicy?.expectedGeometries,
     "GEOMETRY_MISMATCH",
     issues,
   );
   compareExact(
     report.correspondences,
-    manifest.dataPolicy?.expectedCorrespondences,
+    expectedDataPolicy?.expectedCorrespondences,
     "CORRESPONDENCE_MISMATCH",
     issues,
   );
@@ -163,7 +163,13 @@ export async function verifyPromotion({
       report: null,
     };
   }
-  if (journal.state !== "DATA_APPLIED" && journal.state !== "VERIFYING") {
+  const blockedVerification =
+    journal.state === "BLOCKED" && journal.entries.at(-1)?.from === "VERIFYING";
+  if (
+    journal.state !== "DATA_APPLIED" &&
+    journal.state !== "VERIFYING" &&
+    !blockedVerification
+  ) {
     throw new Error(`Verification cannot start from ${journal.state}`);
   }
 
@@ -203,17 +209,28 @@ export async function verifyPromotion({
   if (report) {
     const effectiveAdvisors = advisors ?? report.advisorReadiness;
     advisors = effectiveAdvisors;
-    issues.push(...validateReport(report, manifest, effectiveAdvisors));
+    issues.push(
+      ...validateReport(
+        report,
+        manifest,
+        effectiveAdvisors,
+        dependencies.expectedDataPolicy ?? manifest.dataPolicy,
+      ),
+    );
   }
   else if (issues.length === 0) issues.push(issue("POSTFLIGHT_FAILED", "No postflight report"));
 
   const evidenceSha256 = evidence({ report, advisors, issues });
   const passed = issues.length === 0;
-  const finalJournal = transitionJournal(current, {
-    to: passed ? "VERIFIED" : "BLOCKED",
-    evidenceSha256,
-  });
-  await persist(dependencies, finalJournal);
+  let finalJournal = current;
+  if (passed || current.state !== "BLOCKED") {
+    finalJournal = transitionJournal(current, {
+      to: passed ? "VERIFIED" : "BLOCKED",
+      evidenceSha256,
+      probeResolution: current.state === "BLOCKED" ? "verification-reprobe:complete" : null,
+    });
+    await persist(dependencies, finalJournal);
+  }
   return {
     status: passed ? "PASSED" : "BLOCKED",
     journal: finalJournal,

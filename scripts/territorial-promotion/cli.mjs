@@ -427,12 +427,16 @@ function createDefaultDependencies(repoRoot = process.cwd()) {
       const paths = runtimePaths(repoRoot, manifest);
       const journal = await loadExistingJournal(paths.journal, manifest);
       if (!journal) return { status: "BLOCKED", reason: "journal missing" };
+      const expectedDataPolicy = manifest.contractVersion === 2
+        ? (await loadPredecessor(manifest.recovery.predecessorManifestSha256)).predecessorManifest.dataPolicy
+        : manifest.dataPolicy;
       const result = await verifyPromotion({
         manifest,
         projectRef: TARGET_PROJECT_REF,
         journal,
         repoRoot,
         dependencies: {
+          expectedDataPolicy,
           persistJournal: (value) => saveJournalAtomically(paths.journal, value),
         },
       });
