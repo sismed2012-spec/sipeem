@@ -1,7 +1,7 @@
 # Promoción territorial a Producción — Diseño
 
 **Fecha:** 2026-10-01  
-**Estado:** pendiente de revisión de la especificación  
+**Estado:** especificación aprobada
 **Fuente:** SIPEEM-DEV (`nppvprbfmjbhwheghipa`)  
 **Destino:** SIPEEM-TERRITORIAL-PROD (`cdvukcthosppezjscwod`)  
 **Aplicación:** proyecto Vercel `sipeem`
