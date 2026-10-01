@@ -49,7 +49,7 @@ export function parsePreflightReport(stdout, expectedKind) {
   return value;
 }
 
-async function defaultDockerHealth() {
+export async function defaultDockerHealth() {
   const result = await runProcessOnce({
     command: "docker",
     args: ["info", "--format", "{{json .ServerVersion}}"],
@@ -67,7 +67,7 @@ export function buildPsqlHealthInvocation() {
   };
 }
 
-async function defaultPsqlHealth() {
+export async function defaultPsqlHealth() {
   const result = await runProcessOnce(buildPsqlHealthInvocation());
   return {
     available: result.exitCode === 0,
@@ -75,7 +75,7 @@ async function defaultPsqlHealth() {
   };
 }
 
-async function defaultQueryProject({ projectRef, sqlFile, repoRoot }) {
+export async function defaultQueryProject({ projectRef, sqlFile, repoRoot }) {
   const args = ["db", "query", "--linked", "--file", path.resolve(repoRoot, sqlFile)];
   assertSafeOperation({ phase: "preflight", projectRef, args });
   const invocation = buildSupabaseInvocation({ args, projectRef });
@@ -141,7 +141,7 @@ function parseProbeResult(result, kind, issues) {
   }
 }
 
-async function captureDependency(operation, fallback) {
+export async function captureDependency(operation, fallback) {
   try {
     return await operation();
   } catch (error) {

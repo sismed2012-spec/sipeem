@@ -35,7 +35,7 @@ async function createValidLayout() {
       `infra/territorial/supabase/migrations/202609${String(index).padStart(8, "0")}_territorial.sql`,
     );
   }
-  for (let index = 1; index <= 24; index += 1) {
+  for (let index = 1; index <= 25; index += 1) {
     await write(
       `infra/territorial/supabase/tests/territorial_${String(index).padStart(2, "0")}.sql`,
     );
@@ -47,7 +47,7 @@ async function createValidLayout() {
   return root;
 }
 
-test("accepts only the isolated 19/49/24 operational-territorial layout", async () => {
+test("accepts only the isolated 19/49/25 operational-territorial layout", async () => {
   const root = await createValidLayout();
 
   const report = await inspectTerritorialLayout(root);
@@ -57,7 +57,7 @@ test("accepts only the isolated 19/49/24 operational-territorial layout", async 
     errors: [],
     operationalMigrations: 19,
     territorialMigrations: 49,
-    territorialTests: 24,
+    territorialTests: 25,
   });
 });
 
@@ -76,7 +76,7 @@ test("rejects migrations placed in the opposite workdir", async () => {
 test("rejects missing counts, config, and absolute paths", async () => {
   const root = await createValidLayout();
   await rm(
-    path.join(root, "infra/territorial/supabase/tests/territorial_24.sql"),
+    path.join(root, "infra/territorial/supabase/tests/territorial_25.sql"),
   );
   await rm(path.join(root, "infra/territorial/supabase/config.toml"));
   await write(
@@ -88,7 +88,7 @@ test("rejects missing counts, config, and absolute paths", async () => {
 
   assert.equal(report.ok, false);
   assert.match(report.errors.join("\n"), /expected 49 territorial migrations, found 50/i);
-  assert.match(report.errors.join("\n"), /expected 24 territorial tests, found 23/i);
+  assert.match(report.errors.join("\n"), /expected 25 territorial tests, found 24/i);
   assert.match(report.errors.join("\n"), /config\.toml is required/i);
   assert.match(report.errors.join("\n"), /absolute path/i);
 });

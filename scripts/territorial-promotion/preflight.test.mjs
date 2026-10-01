@@ -307,3 +307,19 @@ test("ships two single-statement read-only probes with the required signals", as
     }
   }
 });
+
+test("legacy target preflight retains the empty-target rule", async () => {
+  const deps = dependencies({
+    projectRef: TARGET_PROJECT_REF,
+    reportOverrides: { userTables: ["territorios_secciones"] },
+  });
+  const result = await runReadOnlyPreflight({
+    role: "target",
+    projectRef: TARGET_PROJECT_REF,
+    manifest: manifest(),
+    migrationDir: "migrations",
+    exceptions: [],
+    dependencies: deps,
+  });
+  assert.ok(result.issues.some(({ code }) => code === "TARGET_NOT_EMPTY"));
+});
