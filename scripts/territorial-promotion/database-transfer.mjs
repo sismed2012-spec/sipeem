@@ -356,6 +356,13 @@ function assertTargetConnectionIdentity(connection, expectedProjectRef) {
   if (!direct && !pooler) {
     throw new Error("Target database endpoint is not bound to the target project");
   }
+
+  const sslMode = typeof env.PGSSLMODE === "string"
+    ? env.PGSSLMODE.trim().toLowerCase()
+    : "";
+  if (!["require", "verify-ca", "verify-full"].includes(sslMode)) {
+    throw new Error("Target database connection requires secure PGSSLMODE=require or stronger");
+  }
 }
 
 export async function restoreDataArtifactOnce({

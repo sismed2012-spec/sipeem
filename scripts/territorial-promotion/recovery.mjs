@@ -299,14 +299,19 @@ async function persist(persistJournal, journal) {
 export async function adoptRecoverySchema({ manifest, journal, dependencies = {}, ...options }) {
   assertRecoveryManifest(manifest);
   validateJournal(journal, expectedIdentity(manifest));
-  if (journal.state !== "PREFLIGHT_PASSED") {
+  if (!["PREFLIGHT_PASSED", "SCHEMA_ADOPTING"].includes(journal.state)) {
     throw new Error(`Recovery schema adoption cannot start from ${journal.state}`);
   }
-  const adopting = transitionJournal(journal, {
-    to: "SCHEMA_ADOPTING",
-    evidenceSha256: evidence({ action: "read-only-schema-adoption", manifestSha256: manifest.manifestSha256 }),
-  });
-  await persist(dependencies.persistJournal, adopting);
+  const adopting = journal.state === "SCHEMA_ADOPTING"
+    ? journal
+    : transitionJournal(journal, {
+        to: "SCHEMA_ADOPTING",
+        evidenceSha256: evidence({
+          action: "read-only-schema-adoption",
+          manifestSha256: manifest.manifestSha256,
+        }),
+      });
+  if (adopting !== journal) await persist(dependencies.persistJournal, adopting);
 
   let result;
   try {

@@ -231,6 +231,28 @@ test("adopts schema with two durable local transitions and no remote write", asy
   assert.equal(deps.calls.write, 0);
 });
 
+test("resumes a crashed read-only schema adoption from SCHEMA_ADOPTING", async () => {
+  const value = manifest();
+  const adopting = transitionJournal(preflightJournal(value), {
+    to: "SCHEMA_ADOPTING",
+    evidenceSha256: HASH,
+  });
+  const deps = dependencies();
+
+  const result = await adoptRecoverySchema({
+    manifest: value,
+    journal: adopting,
+    migrationDir: "infra/territorial/supabase/migrations",
+    exceptions: [],
+    dependencies: deps,
+  });
+
+  assert.equal(result.status, "PASSED");
+  assert.equal(result.journal.state, "SCHEMA_APPLIED");
+  assert.deepEqual(deps.calls.persisted.map(({ state }) => state), ["SCHEMA_APPLIED"]);
+  assert.equal(deps.calls.write, 0);
+});
+
 test("blocks adoption on a probe failure without retry or repair", async () => {
   const value = manifest();
   const deps = dependencies({

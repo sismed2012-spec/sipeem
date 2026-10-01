@@ -73,6 +73,21 @@ Si se agotan creditos o se pierde conectividad, no se elimina el journal ni se
 reinicia la fase. Al volver el servicio se ejecutan sondas de lectura y se
 continua desde el ultimo estado confirmado.
 
+### Recuperacion de un candado de esquema huerfano
+
+El archivo `infra/territorial/journals/<manifest-sha256>.json.schema-apply.lock`
+falla cerrado si el proceso termina abruptamente. Nunca se elimina mientras
+exista un proceso `territorial:promote ... schema-apply` activo.
+
+1. Confirmar que no existe ningun proceso de promocion de esquema activo.
+2. Leer el journal exacto del mismo manifiesto.
+3. Si el estado es `SCHEMA_APPLYING`, conservar el candado y ejecutar solamente
+   las sondas de lectura; no repetir `db push`.
+4. Solo si el journal sigue en `PREFLIGHT_PASSED`, no existe proceso activo y no
+   se inicio la escritura remota, eliminar exclusivamente ese archivo `.lock`.
+5. Registrar la comprobacion y volver a ejecutar el plan antes de una nueva
+   ejecucion explicitamente confirmada. No hay reintento automatico.
+
 ## Corte aislado en Preview
 
 1. Crear una rama temporal desde el commit verificado.

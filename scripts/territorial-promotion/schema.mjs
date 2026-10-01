@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { mkdir, open, readFile, unlink } from "node:fs/promises";
 import path from "node:path";
 
 import { transitionJournal, validateJournal } from "./journal.mjs";
@@ -344,78 +344,115 @@ export async function applySchemaPromotionOnce({
     throw new Error(`Schema promotion cannot start from ${journal.state}`);
   }
 
-  const planner = dependencies.planSchemaPromotion ?? planSchemaPromotion;
-  const plan = await planner({
-    manifest,
-    projectRef: manifest.target.projectRef,
+  const lockPath = dependencies.schemaLockPath ?? path.join(
     repoRoot,
-    dependencies,
-  });
-  const expectedMigrations = migrationNames(manifest);
-  if (
-    !plan?.matchesManifest ||
-    !Array.isArray(plan.migrations) ||
-    !sameOrder(plan.migrations, expectedMigrations) ||
-    !SHA256.test(plan.evidenceSha256)
-  ) {
-    throw new Error("Schema plan does not exactly match the manifest");
-  }
-
-  const applying = transitionJournal(journal, {
-    to: "SCHEMA_APPLYING",
-    evidenceSha256: plan.evidenceSha256,
-  });
-  await persistTransition(dependencies.persistJournal, applying);
-
-  const args = ["db", "push", "--skip-vault"];
-  assertSafeOperation({
-    phase: "schema-apply",
-    projectRef: manifest.target.projectRef,
-    args,
-  });
-  const invocation = buildSupabaseInvocation({
-    args,
-    projectRef: manifest.target.projectRef,
-  });
-  const runner = dependencies.runProcessOnce ?? runProcessOnce;
-  let processResult;
+    "infra",
+    "territorial",
+    "journals",
+    `${manifest.manifestSha256}.schema-apply.lock`,
+  );
+  await mkdir(path.dirname(lockPath), { recursive: true });
+  let lock;
   try {
-    processResult = await runner({ ...invocation, cwd: repoRoot });
+    lock = await open(lockPath, "wx");
   } catch (error) {
-    processResult = {
-      exitCode: null,
-      stdout: "",
-      stderr: redactSensitiveText(error?.message ?? String(error)),
-      errorCode: "RUNNER_ERROR",
-    };
+    if (error?.code === "EEXIST") {
+      throw new Error("Schema promotion is already claimed by an exclusive process");
+    }
+    throw error;
   }
 
-  if (processResult.exitCode !== 0) {
-    const failed = transitionJournal(applying, {
-      to: Number.isInteger(processResult.exitCode) ? "FAILED_CONFIRMED" : "FAILED_UNKNOWN",
-      evidenceSha256: processEvidence(processResult),
-    });
-    return persistTransition(dependencies.persistJournal, failed);
-  }
-
-  let probe;
   try {
-    probe = await (dependencies.probeSchemaState ?? probeSchemaState)({
-      projectRef: manifest.target.projectRef,
+    if (typeof dependencies.reloadJournal !== "function") {
+      throw new Error("Schema promotion requires a durable journal reload after claiming exclusivity");
+    }
+    const durableJournal = await dependencies.reloadJournal();
+    validateJournal(durableJournal, expectedJournalIdentity(manifest));
+    if (durableJournal.state === "SCHEMA_APPLIED") return durableJournal;
+    if (durableJournal.state !== journal.state) {
+      throw new Error(
+        `Schema promotion rejected a stale exclusive claim from ${journal.state} to ${durableJournal.state}`,
+      );
+    }
+
+    const planner = dependencies.planSchemaPromotion ?? planSchemaPromotion;
+    const plan = await planner({
       manifest,
+      projectRef: manifest.target.projectRef,
       repoRoot,
       dependencies,
     });
-  } catch (error) {
-    const detail = redactSensitiveText(error?.message ?? String(error));
-    probe = {
-      status: "UNKNOWN",
-      evidenceSha256: evidence({ status: "UNKNOWN", detail }),
-    };
+    const expectedMigrations = migrationNames(manifest);
+    if (
+      !plan?.matchesManifest ||
+      !Array.isArray(plan.migrations) ||
+      !sameOrder(plan.migrations, expectedMigrations) ||
+      !SHA256.test(plan.evidenceSha256)
+    ) {
+      throw new Error("Schema plan does not exactly match the manifest");
+    }
+
+    const applying = transitionJournal(durableJournal, {
+      to: "SCHEMA_APPLYING",
+      evidenceSha256: plan.evidenceSha256,
+    });
+    await persistTransition(dependencies.persistJournal, applying);
+
+    const args = ["db", "push", "--skip-vault"];
+    assertSafeOperation({
+      phase: "schema-apply",
+      projectRef: manifest.target.projectRef,
+      args,
+    });
+    const invocation = buildSupabaseInvocation({
+      args,
+      projectRef: manifest.target.projectRef,
+    });
+    const runner = dependencies.runProcessOnce ?? runProcessOnce;
+    let processResult;
+    try {
+      processResult = await runner({ ...invocation, cwd: repoRoot });
+    } catch (error) {
+      processResult = {
+        exitCode: null,
+        stdout: "",
+        stderr: redactSensitiveText(error?.message ?? String(error)),
+        errorCode: "RUNNER_ERROR",
+      };
+    }
+
+    if (processResult.exitCode !== 0) {
+      const failed = transitionJournal(applying, {
+        to: Number.isInteger(processResult.exitCode) ? "FAILED_CONFIRMED" : "FAILED_UNKNOWN",
+        evidenceSha256: processEvidence(processResult),
+      });
+      return persistTransition(dependencies.persistJournal, failed);
+    }
+
+    let probe;
+    try {
+      probe = await (dependencies.probeSchemaState ?? probeSchemaState)({
+        projectRef: manifest.target.projectRef,
+        manifest,
+        repoRoot,
+        dependencies,
+      });
+    } catch (error) {
+      const detail = redactSensitiveText(error?.message ?? String(error));
+      probe = {
+        status: "UNKNOWN",
+        evidenceSha256: evidence({ status: "UNKNOWN", detail }),
+      };
+    }
+    const next = transitionJournal(applying, {
+      to: probe.status === "COMPLETE" ? "SCHEMA_APPLIED" : "FAILED_UNKNOWN",
+      evidenceSha256: probe.evidenceSha256,
+    });
+    return persistTransition(dependencies.persistJournal, next);
+  } finally {
+    await lock.close();
+    await unlink(lockPath).catch((error) => {
+      if (error?.code !== "ENOENT") throw error;
+    });
   }
-  const next = transitionJournal(applying, {
-    to: probe.status === "COMPLETE" ? "SCHEMA_APPLIED" : "FAILED_UNKNOWN",
-    evidenceSha256: probe.evidenceSha256,
-  });
-  return persistTransition(dependencies.persistJournal, next);
 }

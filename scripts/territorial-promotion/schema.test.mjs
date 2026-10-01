@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 
 import { createJournal, transitionJournal } from "./journal.mjs";
@@ -147,6 +149,7 @@ test("persists SCHEMA_APPLYING before one push and requires a complete postfligh
         evidenceSha256: "d".repeat(64),
       }),
       persistJournal: async (journal) => persisted.push(structuredClone(journal)),
+      reloadJournal: async () => preflightJournal(),
       runProcessOnce: async () => {
         pushes += 1;
         assert.equal(persisted.at(-1).state, "SCHEMA_APPLYING");
@@ -161,6 +164,75 @@ test("persists SCHEMA_APPLYING before one push and requires a complete postfligh
 
   assert.equal(pushes, 1);
   assert.deepEqual(persisted.map(({ state }) => state), ["SCHEMA_APPLYING", "SCHEMA_APPLIED"]);
+  assert.equal(result.state, "SCHEMA_APPLIED");
+});
+
+test("allows only one concurrent process to claim the same schema push", async () => {
+  const input = manifest();
+  const directory = await mkdtemp(path.join(os.tmpdir(), "schema-apply-lock-"));
+  const lockPath = path.join(directory, "schema-apply.lock");
+  let durableJournal = preflightJournal();
+  let releaseFirst;
+  let pushes = 0;
+  const dependencies = {
+    schemaLockPath: lockPath,
+    reloadJournal: async () => structuredClone(durableJournal),
+    persistJournal: async (value) => { durableJournal = structuredClone(value); },
+    planSchemaPromotion: async () => ({
+      matchesManifest: true,
+      migrations: input.migrations.map(({ path: migrationPath }) => migrationPath.split("/").at(-1)),
+      evidenceSha256: "d".repeat(64),
+    }),
+    runProcessOnce: async () => {
+      pushes += 1;
+      if (pushes === 1) await new Promise((resolve) => { releaseFirst = resolve; });
+      return { exitCode: 0, stdout: "Applied", stderr: "" };
+    },
+    probeSchemaState: async () => ({ status: "COMPLETE", evidenceSha256: "e".repeat(64) }),
+  };
+
+  const first = applySchemaPromotionOnce({
+    manifest: input,
+    journal: preflightJournal(),
+    confirmation: `${MANIFEST_SHA}:SCHEMA_APPLY`,
+    dependencies,
+  });
+  while (pushes === 0) await new Promise((resolve) => setImmediate(resolve));
+
+  const second = applySchemaPromotionOnce({
+    manifest: input,
+    journal: preflightJournal(),
+    confirmation: `${MANIFEST_SHA}:SCHEMA_APPLY`,
+    dependencies,
+  });
+  await assert.rejects(second, /already claimed|exclusive/iu);
+  releaseFirst();
+
+  assert.equal((await first).state, "SCHEMA_APPLIED");
+  assert.equal(pushes, 1);
+});
+
+test("creates the default schema lock directory in a clean checkout", async () => {
+  const input = manifest();
+  const repoRoot = await mkdtemp(path.join(os.tmpdir(), "schema-clean-checkout-"));
+  const result = await applySchemaPromotionOnce({
+    manifest: input,
+    journal: preflightJournal(),
+    confirmation: `${MANIFEST_SHA}:SCHEMA_APPLY`,
+    repoRoot,
+    dependencies: {
+      reloadJournal: async () => preflightJournal(),
+      persistJournal: async () => {},
+      planSchemaPromotion: async () => ({
+        matchesManifest: true,
+        migrations: input.migrations.map(({ path: migrationPath }) => migrationPath.split("/").at(-1)),
+        evidenceSha256: "d".repeat(64),
+      }),
+      runProcessOnce: async () => ({ exitCode: 0, stdout: "Applied", stderr: "" }),
+      probeSchemaState: async () => ({ status: "COMPLETE", evidenceSha256: "e".repeat(64) }),
+    },
+  });
+
   assert.equal(result.state, "SCHEMA_APPLIED");
 });
 
@@ -183,6 +255,7 @@ test("classifies a known failure and process loss without retrying", async () =>
           evidenceSha256: "d".repeat(64),
         }),
         persistJournal: async () => {},
+        reloadJournal: async () => preflightJournal(),
         runProcessOnce: async () => {
           pushes += 1;
           return processResult;
@@ -253,6 +326,7 @@ test("rejects an unrelated confirmation or mismatched plan before spawning", asy
         dependencies: {
           planSchemaPromotion: async () => ({ matchesManifest, evidenceSha256: "d".repeat(64) }),
           persistJournal: async () => {},
+          reloadJournal: async () => preflightJournal(),
           runProcessOnce: async () => {
             pushes += 1;
           },
@@ -273,6 +347,7 @@ test("rejects an unrelated confirmation or mismatched plan before spawning", asy
           evidenceSha256: "d".repeat(64),
         }),
         persistJournal: async () => {},
+        reloadJournal: async () => preflightJournal(),
         runProcessOnce: async () => {
           pushes += 1;
         },

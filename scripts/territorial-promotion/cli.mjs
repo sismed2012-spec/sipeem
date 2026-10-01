@@ -115,7 +115,12 @@ function exactValue(actual, expected) {
   return JSON.stringify(canonicalize(actual)) === JSON.stringify(canonicalize(expected));
 }
 
-export function classifyDataRestoreProbe({ report, expectations, expectedDataPolicy }) {
+export function classifyDataRestoreProbe({
+  report,
+  absenceReport = null,
+  expectations,
+  expectedDataPolicy,
+}) {
   if (report?.contractVersion !== 1 || report?.kind !== "promotion_postflight") {
     throw new Error("Data-state probe returned an invalid postflight report");
   }
@@ -130,10 +135,35 @@ export function classifyDataRestoreProbe({ report, expectations, expectedDataPol
     Array.isArray(report.operationalObjects) && report.operationalObjects.length === 0 &&
     report.traceability?.orphanedResultadoStagingReferences === 0 &&
     report.traceability?.nonNullResultadoStagingReferences === 0;
-  const status = exact
-    ? "COMPLETE"
-    : "PARTIAL";
-  return { status, evidenceSha256: sha256({ report, expectations, status }) };
+  let status = exact ? "COMPLETE" : "PARTIAL";
+  if (!exact && absenceReport != null) {
+    if (
+      absenceReport?.contractVersion !== 1 ||
+      absenceReport?.kind !== "promotion_recovery_absence" ||
+      !Array.isArray(absenceReport.tables)
+    ) {
+      throw new Error("Data-state probe returned an invalid absence report");
+    }
+    const expectedTables = (expectedDataPolicy?.include ?? [])
+      .map(({ table }) => table)
+      .sort();
+    const actualTables = absenceReport.tables
+      .map(({ table, rowCount }) => ({ table, rowCount }))
+      .sort((left, right) => String(left.table).localeCompare(String(right.table)));
+    const exactEmptySet =
+      expectedTables.length > 0 &&
+      actualTables.length === expectedTables.length &&
+      new Set(actualTables.map(({ table }) => table)).size === actualTables.length &&
+      actualTables.every(
+        ({ table, rowCount }, index) =>
+          table === expectedTables[index] && Number.isInteger(rowCount) && rowCount === 0,
+      );
+    if (exactEmptySet) status = "ABSENT";
+  }
+  return {
+    status,
+    evidenceSha256: sha256({ report, absenceReport, expectations, status }),
+  };
 }
 
 export function buildNativeAdvisorInvocation(projectRef) {
@@ -395,6 +425,8 @@ function createDefaultDependencies(repoRoot = process.cwd()) {
         repoRoot,
         dependencies: {
           persistJournal: (value) => saveJournalAtomically(paths.journal, value),
+          reloadJournal: () => loadExistingJournal(paths.journal, manifest),
+          schemaLockPath: `${paths.journal}.schema-apply.lock`,
         },
       });
       return { status: next.state, state: next.state, nextAction: nextAction(next.state, manifest) };
@@ -470,16 +502,37 @@ function createDefaultDependencies(repoRoot = process.cwd()) {
             },
           }),
           probeDataState: async ({ projectRef, manifest: activeManifest }) => {
-            const result = await queryProjectSql({
+            const postflightResult = await queryProjectSql({
               projectRef,
               sqlFile: "infra/territorial/supabase/tests/promotion_postflight.sql",
             });
-            if (result.exitCode !== 0) throw new Error(`Data-state probe BLOCKED: ${result.stderr}`);
+            if (postflightResult.exitCode !== 0) {
+              throw new Error(`Data-state probe BLOCKED: ${postflightResult.stderr}`);
+            }
             const expectedDataPolicy = activeManifest.contractVersion === 2
               ? (await loadPredecessor(activeManifest.recovery.predecessorManifestSha256)).predecessorManifest.dataPolicy
               : activeManifest.dataPolicy;
+            const report = unwrapQueryReport(postflightResult.stdout, "promotion_postflight");
+            const postflight = classifyDataRestoreProbe({
+              report,
+              expectations: activeManifest.expectations,
+              expectedDataPolicy,
+            });
+            if (postflight.status === "COMPLETE") return postflight;
+
+            const absenceResult = await queryProjectSql({
+              projectRef,
+              sqlFile: "infra/territorial/supabase/tests/promotion_recovery_absence.sql",
+            });
+            if (absenceResult.exitCode !== 0) {
+              throw new Error(`Data absence probe BLOCKED: ${absenceResult.stderr}`);
+            }
             return classifyDataRestoreProbe({
-              report: unwrapQueryReport(result.stdout, "promotion_postflight"),
+              report,
+              absenceReport: unwrapQueryReport(
+                absenceResult.stdout,
+                "promotion_recovery_absence",
+              ),
               expectations: activeManifest.expectations,
               expectedDataPolicy,
             });

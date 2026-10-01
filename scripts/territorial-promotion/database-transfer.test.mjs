@@ -345,6 +345,7 @@ test("restores once with credentials only in the child environment", async () =>
           PGUSER: `postgres.${TARGET_PROJECT_REF}`,
           PGDATABASE: "postgres",
           PGPASSWORD: "top-secret",
+          PGSSLMODE: "require",
         },
       }),
       runProcessOnce: async (value) => {
@@ -425,6 +426,7 @@ test("rejects a database endpoint that is not bound to the target project", asyn
             PGUSER: "postgres",
             PGDATABASE: "postgres",
             PGPASSWORD: "top-secret",
+            PGSSLMODE: "require",
           },
         }),
         runProcessOnce: async () => {
@@ -437,6 +439,53 @@ test("rejects a database endpoint that is not bound to the target project", asyn
   );
 
   assert.deepEqual(persisted, []);
+  assert.equal(calls, 0);
+});
+
+test("rejects insecure or missing TLS modes before data restoration", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "restore-target-tls-"));
+  const artifactPath = path.join(directory, "territorial.sql");
+  const bytes = "COPY public.canonical FROM stdin;\n1\n\\.\n";
+  await writeFile(artifactPath, bytes, "utf8");
+  const artifact = {
+    contractVersion: 1,
+    path: artifactPath,
+    sha256: createHash("sha256").update(bytes).digest("hex"),
+    sizeBytes: Buffer.byteLength(bytes),
+    manifestSha256: MANIFEST_SHA,
+    sourceProjectRef: SOURCE_PROJECT_REF,
+    lintEvidenceSha256: "f".repeat(64),
+  };
+  let calls = 0;
+
+  for (const sslMode of [undefined, "", "disable", "allow", "prefer"]) {
+    const env = {
+      PGHOST: `db.${TARGET_PROJECT_REF}.supabase.co`,
+      PGUSER: "postgres",
+      PGPASSWORD: "top-secret",
+    };
+    if (sslMode !== undefined) env.PGSSLMODE = sslMode;
+
+    await assert.rejects(
+      restoreDataArtifactOnce({
+        artifact,
+        manifest: manifest(),
+        journal: schemaAppliedJournal(),
+        confirmation: `${MANIFEST_SHA}:DATA_APPLY`,
+        dependencies: {
+          persistJournal: async () => {},
+          reloadJournal: async () => schemaAppliedJournal(),
+          getTargetConnection: async () => ({ projectRef: TARGET_PROJECT_REF, env }),
+          runProcessOnce: async () => {
+            calls += 1;
+            return { exitCode: 0, stdout: "restored", stderr: "" };
+          },
+        },
+      }),
+      /PGSSLMODE|TLS|secure/iu,
+    );
+  }
+
   assert.equal(calls, 0);
 });
 
@@ -469,6 +518,7 @@ test("classifies restore failure and never replays an unresolved data apply", as
           PGHOST: `db.${TARGET_PROJECT_REF}.supabase.co`,
           PGUSER: "postgres",
           PGPASSWORD: "secret",
+          PGSSLMODE: "require",
         },
       }),
       runProcessOnce: async () => {
@@ -522,6 +572,7 @@ test("allows only one concurrent process to claim the same data restore", async 
         PGHOST: `db.${TARGET_PROJECT_REF}.supabase.co`,
         PGUSER: "postgres",
         PGPASSWORD: "secret",
+        PGSSLMODE: "require",
       },
     }),
     runProcessOnce: async () => {
@@ -574,7 +625,12 @@ test("rejects a delayed stale claim after another process completed the restore"
     reloadJournal: async () => structuredClone(durable),
     getTargetConnection: async () => ({
       projectRef: TARGET_PROJECT_REF,
-      env: { PGHOST: `db.${TARGET_PROJECT_REF}.supabase.co`, PGUSER: "postgres", PGPASSWORD: "secret" },
+      env: {
+        PGHOST: `db.${TARGET_PROJECT_REF}.supabase.co`,
+        PGUSER: "postgres",
+        PGPASSWORD: "secret",
+        PGSSLMODE: "require",
+      },
     }),
     runProcessOnce: async () => {
       runners += 1;

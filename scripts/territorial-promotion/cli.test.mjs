@@ -267,6 +267,56 @@ test("classifies interrupted data restores from an exact read-only postflight", 
   assert.match(complete.evidenceSha256, /^[a-f0-9]{64}$/u);
 });
 
+test("classifies a rolled-back data restore only from the exact empty canonical set", () => {
+  const expectations = { sections: 7052, municipalities: 125 };
+  const expectedDataPolicy = {
+    include: [{ table: "public.territorios_secciones" }, { table: "public.territorios_municipios" }],
+    expectedSources: { demographic: [], nominal: [] },
+    expectedGeometries: { srids: [4326], nullGeometries: 0, invalidGeometries: 0 },
+    expectedCorrespondences: { eceg: {}, nominal: {} },
+  };
+  const partialPostflight = {
+    contractVersion: 1,
+    kind: "promotion_postflight",
+    counts: { ...expectations, sections: 0, municipalities: 0 },
+    sources: expectedDataPolicy.expectedSources,
+    geometries: expectedDataPolicy.expectedGeometries,
+    correspondences: expectedDataPolicy.expectedCorrespondences,
+    rpc: { missing: [] },
+    security: { rlsViolations: [], privilegeViolations: [], functionViolations: [] },
+    operationalObjects: [],
+    traceability: { orphanedResultadoStagingReferences: 0, nonNullResultadoStagingReferences: 0 },
+  };
+  const exactAbsence = {
+    contractVersion: 1,
+    kind: "promotion_recovery_absence",
+    tables: [
+      { table: "public.territorios_municipios", rowCount: 0 },
+      { table: "public.territorios_secciones", rowCount: 0 },
+    ],
+  };
+
+  const absent = classifyDataRestoreProbe({
+    report: partialPostflight,
+    absenceReport: exactAbsence,
+    expectations,
+    expectedDataPolicy,
+  });
+  const partial = classifyDataRestoreProbe({
+    report: partialPostflight,
+    absenceReport: {
+      ...exactAbsence,
+      tables: exactAbsence.tables.map((row, index) => ({ ...row, rowCount: index === 0 ? 1 : 0 })),
+    },
+    expectations,
+    expectedDataPolicy,
+  });
+
+  assert.equal(absent.status, "ABSENT");
+  assert.equal(partial.status, "PARTIAL");
+  assert.match(absent.evidenceSha256, /^[a-f0-9]{64}$/u);
+});
+
 test("pins native advisors to the territorial workdir and exact target", () => {
   const invocation = buildNativeAdvisorInvocation(TARGET_PROJECT_REF);
   assert.ok(invocation.args.includes("--workdir"));
