@@ -88,6 +88,25 @@ test("plans exactly 49 ordered migrations with the territorial dry-run", async (
   assert.equal(invocation.shell, undefined);
 });
 
+test("prefers the Supabase JSON dry-run summary over the duplicated human list", async () => {
+  const input = manifest();
+  const names = input.migrations.map(({ path }) => path.split("/").at(-1));
+  const plan = await planSchemaPromotion({
+    manifest: input,
+    projectRef: TARGET_PROJECT_REF,
+    dependencies: {
+      runProcessOnce: async () => ({
+        exitCode: 0,
+        stdout: JSON.stringify({ upToDate: false, dryRun: true, migrations: names }),
+        stderr: dryRunOutput(names),
+      }),
+    },
+  });
+
+  assert.equal(plan.matchesManifest, true);
+  assert.deepEqual(plan.migrations, names);
+});
+
 test("blocks incomplete, extra, reordered, or failed dry-run output", async () => {
   const input = manifest();
   const names = input.migrations.map(({ path }) => path.split("/").at(-1));

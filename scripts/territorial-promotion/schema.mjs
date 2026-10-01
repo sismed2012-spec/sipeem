@@ -60,6 +60,23 @@ function redactResult(result) {
   );
 }
 
+function dryRunSummaryMigrations(result) {
+  for (const stream of [result?.stdout, result?.stderr]) {
+    const lines = String(stream ?? "").split(/\r?\n/u).reverse();
+    for (const line of lines) {
+      try {
+        const value = JSON.parse(line.trim());
+        if (value?.dryRun === true && Array.isArray(value.migrations)) {
+          return value.migrations.map(String);
+        }
+      } catch {
+        // Human-readable CLI lines are the backward-compatible fallback.
+      }
+    }
+  }
+  return null;
+}
+
 export async function planSchemaPromotion({
   manifest,
   projectRef,
@@ -87,7 +104,9 @@ export async function planSchemaPromotion({
     };
   }
   const output = redactResult(result);
-  const migrations = [...output.matchAll(MIGRATION_NAME)].map((match) => match[1]);
+  const migrations =
+    dryRunSummaryMigrations(result) ??
+    [...output.matchAll(MIGRATION_NAME)].map((match) => match[1]);
   const matchesManifest = result.exitCode === 0 && sameOrder(migrations, expected);
   return {
     migrations,
