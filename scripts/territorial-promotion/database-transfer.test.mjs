@@ -278,8 +278,8 @@ test("restores once with credentials only in the child environment", async () =>
       getTargetConnection: async () => ({
         projectRef: TARGET_PROJECT_REF,
         env: {
-          PGHOST: "db.example.invalid",
-          PGUSER: "postgres",
+          PGHOST: "aws-0-us-west-1.pooler.supabase.com",
+          PGUSER: `postgres.${TARGET_PROJECT_REF}`,
           PGDATABASE: "postgres",
           PGPASSWORD: "top-secret",
         },
@@ -329,6 +329,53 @@ test("restores once with credentials only in the child environment", async () =>
   assert.equal(invocation.stdin, undefined);
 });
 
+test("rejects a database endpoint that is not bound to the target project", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "restore-target-identity-"));
+  const artifactPath = path.join(directory, "territorial.sql");
+  const bytes = "COPY public.canonical FROM stdin;\n1\n\\.\n";
+  await writeFile(artifactPath, bytes, "utf8");
+  const artifact = {
+    contractVersion: 1,
+    path: artifactPath,
+    sha256: createHash("sha256").update(bytes).digest("hex"),
+    sizeBytes: Buffer.byteLength(bytes),
+    manifestSha256: MANIFEST_SHA,
+    sourceProjectRef: SOURCE_PROJECT_REF,
+    lintEvidenceSha256: "f".repeat(64),
+  };
+  const persisted = [];
+  let calls = 0;
+
+  await assert.rejects(
+    restoreDataArtifactOnce({
+      artifact,
+      manifest: manifest(),
+      journal: schemaAppliedJournal(),
+      confirmation: `${MANIFEST_SHA}:DATA_APPLY`,
+      dependencies: {
+        persistJournal: async (journal) => persisted.push(journal),
+        getTargetConnection: async () => ({
+          projectRef: TARGET_PROJECT_REF,
+          env: {
+            PGHOST: "db.xvdqlozimvqluwxpbizx.supabase.co",
+            PGUSER: "postgres",
+            PGDATABASE: "postgres",
+            PGPASSWORD: "top-secret",
+          },
+        }),
+        runProcessOnce: async () => {
+          calls += 1;
+          return { exitCode: 0, stdout: "restored", stderr: "" };
+        },
+      },
+    }),
+    /target project/iu,
+  );
+
+  assert.deepEqual(persisted, []);
+  assert.equal(calls, 0);
+});
+
 test("classifies restore failure and never replays an unresolved data apply", async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "restore-resume-"));
   const artifactPath = path.join(directory, "territorial.sql");
@@ -351,7 +398,14 @@ test("classifies restore failure and never replays an unresolved data apply", as
     confirmation: `${MANIFEST_SHA}:DATA_APPLY`,
     dependencies: {
       persistJournal: async () => {},
-      getTargetConnection: async () => ({ projectRef: TARGET_PROJECT_REF, env: { PGPASSWORD: "secret" } }),
+      getTargetConnection: async () => ({
+        projectRef: TARGET_PROJECT_REF,
+        env: {
+          PGHOST: `db.${TARGET_PROJECT_REF}.supabase.co`,
+          PGUSER: "postgres",
+          PGPASSWORD: "secret",
+        },
+      }),
       runProcessOnce: async () => {
         calls += 1;
         return { exitCode: null, stdout: "", stderr: "connection lost", errorCode: "ECONNRESET" };

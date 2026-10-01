@@ -299,6 +299,31 @@ function processEvidence(result, sensitiveValues = []) {
   });
 }
 
+function assertTargetConnectionIdentity(connection, expectedProjectRef) {
+  const env = connection?.env;
+  if (
+    connection?.projectRef !== expectedProjectRef ||
+    !env ||
+    typeof env.PGPASSWORD !== "string" ||
+    env.PGPASSWORD.length === 0
+  ) {
+    throw new Error("Target connection identity or password is unavailable");
+  }
+
+  const host = typeof env.PGHOST === "string"
+    ? env.PGHOST.trim().toLowerCase().replace(/\.$/u, "")
+    : "";
+  const user = typeof env.PGUSER === "string" ? env.PGUSER.trim() : "";
+  const directHost = `db.${expectedProjectRef}.supabase.co`;
+  const direct = host === directHost && user === "postgres";
+  const pooler = /^[a-z0-9.-]+\.pooler\.supabase\.com$/u.test(host) &&
+    user === `postgres.${expectedProjectRef}`;
+
+  if (!direct && !pooler) {
+    throw new Error("Target database endpoint is not bound to the target project");
+  }
+}
+
 export async function restoreDataArtifactOnce({
   artifact,
   manifest,
@@ -330,14 +355,7 @@ export async function restoreDataArtifactOnce({
   const connection = await dependencies.getTargetConnection({
     projectRef: manifest.target.projectRef,
   });
-  if (
-    connection?.projectRef !== manifest.target.projectRef ||
-    !connection.env ||
-    typeof connection.env.PGPASSWORD !== "string" ||
-    connection.env.PGPASSWORD.length === 0
-  ) {
-    throw new Error("Target connection identity or password is unavailable");
-  }
+  assertTargetConnectionIdentity(connection, manifest.target.projectRef);
   const applying = transitionJournal(journal, {
     to: "DATA_APPLYING",
     evidenceSha256: artifact.sha256,
