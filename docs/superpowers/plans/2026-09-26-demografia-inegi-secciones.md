@@ -1,5 +1,10 @@
 # INEGI Demographics by Electoral Section Implementation Plan
 
+> **Ruta histórica:** desde 2026-10-01, toda referencia ejecutable a
+> `supabase/migrations` o `supabase/tests` en este plan se resuelve bajo
+> `infra/territorial/supabase/` y el CLI se ejecuta con
+> `--workdir infra/territorial`.
+
 > **Superseded on 2026-09-26:** This ITER/locality-first plan is retained as
 > implementation history. The approved primary source for section-level
 > demographics is now INEGI's *Estadísticas Censales a Escalas

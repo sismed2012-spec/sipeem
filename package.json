@@ -14,6 +14,8 @@
     "demografia:eceg:preflight": "node --max-old-space-size=6144 scripts/demografia/eceg-profile.mjs",
     "demografia:eceg:import": "node --max-old-space-size=6144 scripts/import-inegi-eceg.mjs",
     "demografia:eceg:publish": "node scripts/publish-inegi-eceg.mjs",
+    "territorial:layout:check": "node scripts/territorial-promotion/layout.mjs --check",
+    "territorial:test": "node --test scripts/territorial-promotion/*.test.mjs",
     "seed": "npx tsx scripts/seed.ts",
     "import:municipal-oficial": "node scripts/import-municipal-oficial.mjs"
   },

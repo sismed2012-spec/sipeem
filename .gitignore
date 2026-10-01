@@ -15,6 +15,9 @@
 /.artifacts/demografia/
 /.artifacts/lista-nominal/
 /supabase/.temp/
+/infra/territorial/supabase/.temp/
+/infra/territorial/journals/
+/infra/territorial/artifacts/
 
 # next.js
 /.next/
