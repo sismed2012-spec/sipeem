@@ -10,6 +10,7 @@ import { SOURCE_PROJECT_REF, TARGET_PROJECT_REF } from "./policy.mjs";
 import {
   buildDumpPlan,
   createDataArtifact,
+  lintDataArtifact,
   restoreDataArtifactOnce,
 } from "./database-transfer.mjs";
 import { computeInventoryFingerprint } from "./data-policy.mjs";
@@ -22,12 +23,20 @@ const STAGING = [
   "public.staging_electoral_registros",
   "public.staging_electoral_resultados",
 ];
+const PRESEEDED = [
+  "public.cat_estados_evento",
+  "public.cat_estados_georreferenciacion",
+  "public.cat_fuentes_evento",
+  "public.cat_niveles_sensibilidad",
+  "public.cat_tipos_asentamiento",
+  "public.cat_tipos_fuerza_electoral",
+];
 
 function inventory(extraTables = []) {
   return {
     contractVersion: 1,
     kind: "promotion_data_inventory",
-    tables: ["public.canonical", ...STAGING, ...extraTables].map((name) => ({
+    tables: ["public.fuerzas_electorales", ...STAGING, ...PRESEEDED, ...extraTables].map((name) => ({
       name,
       primaryKey: ["id"],
       estimatedRows: 1,
@@ -41,14 +50,25 @@ function inventory(extraTables = []) {
 
 function dataPolicy(sourceInventory) {
   return {
-    contractVersion: 1,
+    contractVersion: 2,
     sourceProjectRef: SOURCE_PROJECT_REF,
     sourceInventorySha256: computeInventoryFingerprint(sourceInventory),
-    include: [{ table: "public.canonical", reason: "Canonical data." }],
+    include: [{ table: "public.fuerzas_electorales", reason: "Canonical data." }],
     exclude: STAGING.map((table) => ({
       table,
       reason: "Transient staging data.",
       documentedIncomingDependencies: [],
+    })),
+    preseeded: PRESEEDED.map((table, index) => ({
+      table,
+      reason: "Seeded by a reviewed migration.",
+      migration: index === PRESEEDED.length - 1
+        ? "20260912045859_fuerzas_electorales.sql"
+        : "20260912034515_catalogos.sql",
+      orderBy: ["id"],
+      ownedSequences: table === "public.cat_niveles_sensibilidad"
+        ? []
+        : [`${table}_id_seq`],
     })),
   };
 }
@@ -75,7 +95,7 @@ function schemaAppliedJournal() {
   return journal;
 }
 
-test("builds a closed data-only COPY dump plan with one exclusion per table", async () => {
+test("builds a closed data-only COPY dump plan with all nine exclusions", async () => {
   const sourceInventory = inventory();
   const artifactPath = path.join(await mkdtemp(path.join(os.tmpdir(), "dump-plan-")), "data.sql");
   const plan = buildDumpPlan({
@@ -92,10 +112,12 @@ test("builds a closed data-only COPY dump plan with one exclusion per table", as
     "--schema",
     "public",
   ]);
-  assert.equal(plan.args.filter((value) => value === "--exclude").length, 3);
-  for (const table of STAGING) assert.ok(plan.args.includes(table));
-  assert.deepEqual(plan.include, ["public.canonical"]);
+  assert.equal(plan.args.filter((value) => value === "--exclude").length, 9);
+  for (const table of [...STAGING, ...PRESEEDED]) assert.ok(plan.args.includes(table));
+  assert.deepEqual(plan.include, ["public.fuerzas_electorales"]);
   assert.deepEqual(plan.exclude, [...STAGING].sort());
+  assert.deepEqual(plan.preseeded.map(({ table }) => table), [...PRESEEDED].sort());
+  assert.ok(plan.args.includes("public.fuerzas_electorales") === false);
   assert.equal(plan.temporaryPath, `${artifactPath}.tmp`);
   assert.equal(plan.inventorySha256, computeInventoryFingerprint(sourceInventory));
   assert.match(plan.planSha256, /^[a-f0-9]{64}$/u);
@@ -156,7 +178,7 @@ test("blocks before spawning without Docker and creates an atomic hashed artifac
   assert.equal(spawns, 0);
 
   let invocation;
-  const bytes = "COPY public.canonical FROM stdin;\n1\n\\.\n";
+  const bytes = "COPY public.fuerzas_electorales FROM stdin;\n1\n\\.\n";
   const artifact = await createDataArtifact({
     plan,
     manifest: manifest(),
@@ -175,9 +197,59 @@ test("blocks before spawning without Docker and creates an atomic hashed artifac
   assert.equal(await readFile(plan.artifactPath, "utf8"), bytes);
   assert.equal(artifact.sizeBytes, Buffer.byteLength(bytes));
   assert.equal(artifact.sha256, createHash("sha256").update(bytes).digest("hex"));
+  assert.match(artifact.lintEvidenceSha256, /^[a-f0-9]{64}$/u);
   assert.equal(artifact.sourceProjectRef, SOURCE_PROJECT_REF);
   assert.doesNotMatch(JSON.stringify(artifact), /password|token|service_role/iu);
   assert.ok(invocation.args.includes(SOURCE_PROJECT_REF));
+});
+
+test("rejects quoted or unquoted preseeded COPY, INSERT, and setval before rename", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "dump-lint-"));
+  const preseeded = dataPolicy(inventory()).preseeded;
+  const forbidden = [
+    "COPY public.cat_estados_evento FROM stdin;\n",
+    'COPY "public"."cat_estados_evento" FROM stdin;\n',
+    "INSERT INTO public.cat_estados_evento VALUES (1);\n",
+    'INSERT INTO "public"."cat_estados_evento" VALUES (1);\n',
+    "SELECT pg_catalog.setval('public.cat_estados_evento_id_seq', 1, true);\n",
+    "SELECT pg_catalog.setval('public.\"cat_estados_evento_id_seq\"', 1, true);\n",
+  ];
+  for (let index = 0; index < forbidden.length; index += 1) {
+    const artifactPath = path.join(directory, `forbidden-${index}.sql`);
+    await writeFile(artifactPath, forbidden[index], "utf8");
+    await assert.rejects(lintDataArtifact({ artifactPath, preseeded }), /preseeded|forbidden/iu);
+  }
+  const allowedPath = path.join(directory, "allowed.sql");
+  await writeFile(allowedPath, "COPY public.fuerzas_electorales FROM stdin;\n", "utf8");
+  const lint = await lintDataArtifact({ artifactPath: allowedPath, preseeded });
+  assert.equal(lint.status, "PASSED");
+  assert.match(lint.evidenceSha256, /^[a-f0-9]{64}$/u);
+});
+
+test("does not publish a temporary dump that fails preseeded lint", async () => {
+  const sourceInventory = inventory();
+  const directory = await mkdtemp(path.join(os.tmpdir(), "dump-lint-before-rename-"));
+  const plan = buildDumpPlan({
+    inventory: sourceInventory,
+    dataPolicy: dataPolicy(sourceInventory),
+    artifactPath: path.join(directory, "territorial.sql"),
+  });
+  await assert.rejects(
+    createDataArtifact({
+      plan,
+      manifest: manifest(),
+      dependencies: {
+        dockerHealth: async () => ({ available: true, detail: "healthy" }),
+        runProcessOnce: async () => {
+          await writeFile(plan.temporaryPath, "COPY public.cat_fuentes_evento FROM stdin;\n", "utf8");
+          return { exitCode: 0, stdout: "dumped", stderr: "" };
+        },
+      },
+    }),
+    /preseeded|forbidden/iu,
+  );
+  await assert.rejects(readFile(plan.artifactPath, "utf8"), /ENOENT/u);
+  assert.match(await readFile(plan.temporaryPath, "utf8"), /cat_fuentes_evento/u);
 });
 
 test("restores once with credentials only in the child environment", async () => {
@@ -192,6 +264,7 @@ test("restores once with credentials only in the child environment", async () =>
     sizeBytes: Buffer.byteLength(bytes),
     manifestSha256: MANIFEST_SHA,
     sourceProjectRef: SOURCE_PROJECT_REF,
+    lintEvidenceSha256: "f".repeat(64),
   };
   const persisted = [];
   let invocation;
@@ -246,6 +319,8 @@ test("restores once with credentials only in the child environment", async () =>
     "--single-transaction",
     "--set",
     "ON_ERROR_STOP=on",
+    "--set",
+    "VERBOSITY=verbose",
     "--file",
     "/transfer/territorial-data.sql",
   ]);
@@ -266,6 +341,7 @@ test("classifies restore failure and never replays an unresolved data apply", as
     sizeBytes: Buffer.byteLength(bytes),
     manifestSha256: MANIFEST_SHA,
     sourceProjectRef: SOURCE_PROJECT_REF,
+    lintEvidenceSha256: "f".repeat(64),
   };
   let calls = 0;
   let journal = await restoreDataArtifactOnce({

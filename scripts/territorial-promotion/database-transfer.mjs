@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { access, mkdir, rename, stat } from "node:fs/promises";
+import readline from "node:readline";
 import path from "node:path";
 
 import { classifySourceTables } from "./data-policy.mjs";
@@ -10,7 +11,12 @@ import {
   assertSafeOperation,
   buildSupabaseInvocation,
 } from "./policy.mjs";
-import { redactSensitiveText, runProcessOnce } from "./process.mjs";
+import {
+  normalizeProcessFailure,
+  persistFailureEvidence,
+  redactSensitiveText,
+  runProcessOnce,
+} from "./process.mjs";
 
 const SHA256 = /^[a-f0-9]{64}$/u;
 const POSTGRES_CLIENT_IMAGE = "public.ecr.aws/supabase/postgres:17.11.0.002";
@@ -60,18 +66,56 @@ export function buildDumpPlan({ inventory, dataPolicy, artifactPath }) {
   const classification = classifySourceTables({ inventory, dataPolicy });
   const temporaryPath = `${artifactPath}.tmp`;
   const args = ["db", "dump", "--data-only", "--use-copy", "--schema", "public"];
-  for (const table of classification.exclude) args.push("--exclude", table);
+  for (const table of classification.excludedFromDump) args.push("--exclude", table);
   args.push("--file", temporaryPath);
   const plan = {
-    contractVersion: 1,
+    contractVersion: 2,
     artifactPath,
     temporaryPath,
     args,
     include: classification.include,
     exclude: classification.exclude,
+    preseeded: classification.preseeded,
     inventorySha256: classification.inventorySha256,
   };
   return { ...plan, planSha256: dumpPlanSha256(plan) };
+}
+
+function normalizedIdentifier(value) {
+  return String(value).replaceAll('"', "").toLowerCase();
+}
+
+export async function lintDataArtifact({ artifactPath, preseeded }) {
+  if (typeof artifactPath !== "string" || !path.isAbsolute(artifactPath)) {
+    throw new Error("Artifact lint path must be absolute");
+  }
+  if (!Array.isArray(preseeded)) throw new Error("Artifact lint requires preseeded metadata");
+  const tables = preseeded.map(({ table }) => normalizedIdentifier(table));
+  const sequences = preseeded.flatMap(({ ownedSequences = [] }) => ownedSequences.map(normalizedIdentifier));
+  const input = createReadStream(artifactPath, { encoding: "utf8" });
+  const lines = readline.createInterface({ input, crlfDelay: Infinity });
+  let lineNumber = 0;
+  try {
+    for await (const rawLine of lines) {
+      lineNumber += 1;
+      const line = normalizedIdentifier(rawLine).trimStart();
+      const dataStatement = /^(?:copy\s+|insert\s+into\s+)/u.test(line);
+      if (dataStatement && tables.some((table) => line.startsWith(`copy ${table}`) || line.startsWith(`insert into ${table}`))) {
+        throw new Error(`Forbidden preseeded table statement at line ${lineNumber}`);
+      }
+      if (/\bsetval\s*\(/u.test(line) && sequences.some((sequence) => line.includes(sequence))) {
+        throw new Error(`Forbidden preseeded sequence statement at line ${lineNumber}`);
+      }
+    }
+  } finally {
+    lines.close();
+    input.destroy();
+  }
+  const artifactSha256 = await fileSha256(artifactPath);
+  return {
+    status: "PASSED",
+    evidenceSha256: evidence({ artifactSha256, tables: tables.sort(), sequences: sequences.sort() }),
+  };
 }
 
 async function defaultDockerHealth() {
@@ -100,7 +144,7 @@ export async function createDataArtifact({
     throw new Error("Data artifact requires a valid manifest hash");
   }
   if (
-    plan?.contractVersion !== 1 ||
+    plan?.contractVersion !== 2 ||
     !Array.isArray(plan?.args) ||
     !SHA256.test(plan?.inventorySha256 ?? "") ||
     !SHA256.test(plan?.planSha256 ?? "") ||
@@ -143,12 +187,14 @@ export async function createDataArtifact({
   if (!metadata.isFile() || metadata.size <= 0) {
     throw new Error("Data dump did not produce a non-empty temporary artifact");
   }
+  const lint = await lintDataArtifact({ artifactPath: plan.temporaryPath, preseeded: plan.preseeded });
   const artifactSha256 = await fileSha256(plan.temporaryPath);
   await rename(plan.temporaryPath, plan.artifactPath);
   return {
     contractVersion: 1,
     path: plan.artifactPath,
     sha256: artifactSha256,
+    lintEvidenceSha256: lint.evidenceSha256,
     sizeBytes: metadata.size,
     manifestSha256: manifest.manifestSha256,
     sourceProjectRef: manifest.source.projectRef,
@@ -174,6 +220,7 @@ async function validateArtifact(artifact, manifest) {
     artifact?.manifestSha256 !== manifest.manifestSha256 ||
     artifact?.sourceProjectRef !== manifest.source?.projectRef ||
     !SHA256.test(artifact?.sha256 ?? "") ||
+    !SHA256.test(artifact?.lintEvidenceSha256 ?? "") ||
     !Number.isSafeInteger(artifact?.sizeBytes) ||
     artifact.sizeBytes <= 0 ||
     typeof artifact?.path !== "string" ||
@@ -294,6 +341,8 @@ export async function restoreDataArtifactOnce({
     "--single-transaction",
     "--set",
     "ON_ERROR_STOP=on",
+    "--set",
+    "VERBOSITY=verbose",
     "--file",
     CONTAINER_ARTIFACT_PATH,
   ];
@@ -345,13 +394,24 @@ export async function restoreDataArtifactOnce({
       errorCode: "RUNNER_ERROR",
     };
   }
+  let transitionEvidence = processEvidence(result, sensitiveValues);
+  if (result?.exitCode !== 0) {
+    const failure = normalizeProcessFailure({
+      phase: "data-apply",
+      result,
+      sensitiveValues,
+    });
+    const persistFailure = dependencies.persistFailureEvidence ?? persistFailureEvidence;
+    const saved = await persistFailure(path.join(path.dirname(artifact.path), "failure.json"), failure);
+    transitionEvidence = saved.sha256;
+  }
   const next = transitionJournal(applying, {
     to: result?.exitCode === 0
       ? "DATA_APPLIED"
       : Number.isInteger(result?.exitCode)
         ? "FAILED_CONFIRMED"
         : "FAILED_UNKNOWN",
-    evidenceSha256: processEvidence(result, sensitiveValues),
+    evidenceSha256: transitionEvidence,
   });
   return persist(dependencies.persistJournal, next);
 }

@@ -4,7 +4,12 @@ import os from "node:os";
 import path from "node:path";
 import { after, test } from "node:test";
 
-import { redactSensitiveText, runProcessOnce } from "./process.mjs";
+import {
+  normalizeProcessFailure,
+  persistFailureEvidence,
+  redactSensitiveText,
+  runProcessOnce,
+} from "./process.mjs";
 
 const temporaryDirectories = [];
 
@@ -105,4 +110,56 @@ test("redacts connection userinfo, passwords, JWTs, service keys, and supplied v
     assert.doesNotMatch(redacted, new RegExp(secret.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
   assert.match(redacted, /\[REDACTED\]/);
+});
+
+test("normalizes multiline database failures without retaining credentials or row values", () => {
+  const secret = "super-secret-password";
+  const result = {
+    exitCode: 3,
+    errorCode: null,
+    stdout: `postgresql://postgres:${secret}@db.example.test/postgres`,
+    stderr: [
+      "ERROR:  23505: duplicate key value violates unique constraint \"territorios_secciones_pkey\"",
+      "DETAIL: Key (seccion_id)=(sensitive-row-value) already exists.",
+      "CONSTRAINT NAME: territorios_secciones_pkey",
+      `password=${secret}`,
+    ].join("\n"),
+  };
+  const normalized = normalizeProcessFailure({
+    phase: "data-apply",
+    result,
+    sensitiveValues: [secret, "sensitive-row-value"],
+  });
+
+  assert.deepEqual(Object.keys(normalized).sort(), [
+    "errorClass",
+    "errorCode",
+    "exitCode",
+    "objectName",
+    "phase",
+    "sqlState",
+    "stderrSha256",
+    "stdoutSha256",
+  ]);
+  assert.equal(normalized.sqlState, "23505");
+  assert.equal(normalized.errorClass, "UNIQUE_VIOLATION");
+  assert.equal(normalized.objectName, "territorios_secciones_pkey");
+  assert.equal(normalized.exitCode, 3);
+  assert.match(normalized.stdoutSha256, /^[a-f0-9]{64}$/u);
+  assert.match(normalized.stderrSha256, /^[a-f0-9]{64}$/u);
+  assert.doesNotMatch(JSON.stringify(normalized), /super-secret|sensitive-row-value|postgresql:\/\//iu);
+});
+
+test("persists normalized failure evidence atomically and returns its hash", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "promotion-failure-"));
+  temporaryDirectories.push(directory);
+  const filePath = path.join(directory, "failure.json");
+  const normalized = normalizeProcessFailure({
+    phase: "data-apply",
+    result: { exitCode: null, errorCode: "ECONNRESET", stdout: "", stderr: "connection lost" },
+  });
+  const saved = await persistFailureEvidence(filePath, normalized);
+  assert.match(saved.sha256, /^[a-f0-9]{64}$/u);
+  assert.deepEqual(JSON.parse(await readFile(filePath, "utf8")), normalized);
+  await assert.rejects(persistFailureEvidence(filePath, { ...normalized, stderr: "raw" }), /shape|field/iu);
 });
