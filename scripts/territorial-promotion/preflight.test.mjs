@@ -97,6 +97,15 @@ test("parses one strict JSON report and rejects noise or another contract", () =
   );
 });
 
+test("parses the single-row wrapper returned by Supabase db query", () => {
+  const value = report(SOURCE_PROJECT_REF);
+  const wrapped = { rows: [{ jsonb_build_object: value }] };
+  assert.deepEqual(
+    parsePreflightReport(JSON.stringify(wrapped), "promotion_preflight"),
+    value,
+  );
+});
+
 test("runs every read-only dependency once and isolates missing Docker to data", async () => {
   const deps = dependencies({ projectRef: TARGET_PROJECT_REF, docker: false });
   const result = await runReadOnlyPreflight({

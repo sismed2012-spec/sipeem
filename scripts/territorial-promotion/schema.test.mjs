@@ -307,6 +307,36 @@ test("probes exact history, hashes, extensions, security and operational isolati
   assert.equal(partial.status, "PARTIAL");
 });
 
+test("probes the single-row wrapper returned by Supabase db query", async () => {
+  const input = manifest();
+  const versions = input.migrations.map(({ path }) => path.split("/").at(-1).slice(0, 14));
+  const healthy = {
+    contractVersion: 1,
+    kind: "promotion_schema_postflight",
+    migrationVersions: versions,
+    extensions: ["btree_gist", "pgcrypto", "postgis", "vector"],
+    missingRequiredObjects: [],
+    territorialObjectCount: 70,
+    rlsViolations: [],
+    privilegeViolations: [],
+    functionViolations: [],
+    operationalObjects: [],
+  };
+  const result = await probeSchemaState({
+    projectRef: TARGET_PROJECT_REF,
+    manifest: input,
+    dependencies: {
+      validateLocalHashes: async () => ({ valid: true, mismatches: [] }),
+      queryProject: async () => ({
+        exitCode: 0,
+        stdout: JSON.stringify({ rows: [{ jsonb_build_object: healthy }] }),
+        stderr: "",
+      }),
+    },
+  });
+  assert.equal(result.status, "COMPLETE");
+});
+
 test("ships a single read-only schema postflight with every invariant", async () => {
   const sql = await readFile(
     "infra/territorial/supabase/tests/promotion_schema_postflight.sql",

@@ -30,6 +30,15 @@ export function parsePreflightReport(stdout, expectedKind) {
   } catch {
     throw new Error("Preflight probe must return a single JSON document");
   }
+  if (Array.isArray(value?.rows) && value.rows.length === 1) {
+    const candidates = Object.values(value.rows[0] ?? {}).filter(
+      (candidate) => candidate?.kind === expectedKind,
+    );
+    if (candidates.length !== 1) {
+      throw new Error("Preflight query wrapper must contain exactly one report");
+    }
+    [value] = candidates;
+  }
   if (!value || Array.isArray(value) || typeof value !== "object") {
     throw new Error("Preflight probe must return one JSON object");
   }

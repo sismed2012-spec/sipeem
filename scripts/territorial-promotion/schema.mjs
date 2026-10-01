@@ -123,6 +123,15 @@ function parsePostflight(stdout) {
   } catch {
     throw new Error("Schema postflight must return a single JSON document");
   }
+  if (Array.isArray(report?.rows) && report.rows.length === 1) {
+    const candidates = Object.values(report.rows[0] ?? {}).filter(
+      (candidate) => candidate?.kind === "promotion_schema_postflight",
+    );
+    if (candidates.length !== 1) {
+      throw new Error("Schema postflight query wrapper must contain exactly one report");
+    }
+    [report] = candidates;
+  }
   if (
     !report ||
     Array.isArray(report) ||
