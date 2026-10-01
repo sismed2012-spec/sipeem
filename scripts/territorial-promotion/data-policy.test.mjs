@@ -53,7 +53,91 @@ test("classifies every observed public table exactly once", () => {
 
   assert.deepEqual(result.include, ["public.child", "public.parent"]);
   assert.deepEqual(result.exclude, [...REQUIRED_EXCLUSIONS].sort());
+  assert.deepEqual(result.preseeded, []);
+  assert.deepEqual(result.excludedFromDump, [...REQUIRED_EXCLUSIONS].sort());
   assert.equal(result.inventorySha256, computeInventoryFingerprint(sourceInventory));
+});
+
+test("classifies migration-preseeded tables exactly once", () => {
+  const sourceInventory = inventory([
+    "public.parent",
+    "public.child",
+    "public.seeded",
+    ...REQUIRED_EXCLUSIONS,
+  ]);
+  const base = policy(sourceInventory, {
+    contractVersion: 2,
+    include: [
+      { table: "public.parent", reason: "Territorial canonical data." },
+      { table: "public.child", reason: "Territorial dependent data." },
+    ],
+    preseeded: [
+      {
+        table: "public.seeded",
+        reason: "Created and populated by the reviewed schema migration.",
+        migration: "20260912034515_catalogos.sql",
+        orderBy: ["seeded_id"],
+        ownedSequences: ["public.seeded_seeded_id_seq"],
+      },
+    ],
+  });
+
+  const result = classifySourceTables({ inventory: sourceInventory, dataPolicy: base });
+
+  assert.deepEqual(result.include, ["public.child", "public.parent"]);
+  assert.deepEqual(result.preseeded, base.preseeded);
+  assert.deepEqual(result.excludedFromDump, [
+    "public.seeded",
+    ...REQUIRED_EXCLUSIONS,
+  ].sort());
+});
+
+test("rejects incomplete or unsafe preseeded metadata", () => {
+  const sourceInventory = inventory([
+    "public.parent",
+    "public.child",
+    "public.seeded",
+    ...REQUIRED_EXCLUSIONS,
+  ]);
+  const entry = {
+    table: "public.seeded",
+    reason: "Created and populated by the reviewed schema migration.",
+    migration: "20260912034515_catalogos.sql",
+    orderBy: ["seeded_id"],
+    ownedSequences: ["public.seeded_seeded_id_seq"],
+  };
+  const base = policy(sourceInventory, {
+    contractVersion: 2,
+    include: [
+      { table: "public.parent", reason: "Territorial canonical data." },
+      { table: "public.child", reason: "Territorial dependent data." },
+    ],
+    preseeded: [entry],
+  });
+  const candidates = [
+    [{ ...entry, migration: "" }, /migration/iu],
+    [{ ...entry, migration: "unsafe.sql" }, /migration/iu],
+    [{ ...entry, orderBy: [] }, /order/iu],
+    [{ ...entry, orderBy: ["Bad Column"] }, /order/iu],
+    [{ ...entry, ownedSequences: null }, /sequence/iu],
+    [{ ...entry, ownedSequences: ["private.bad_seq"] }, /sequence/iu],
+  ];
+  for (const [candidate, expected] of candidates) {
+    assert.throws(
+      () => classifySourceTables({
+        inventory: sourceInventory,
+        dataPolicy: { ...base, preseeded: [candidate] },
+      }),
+      expected,
+    );
+  }
+  assert.throws(
+    () => classifySourceTables({
+      inventory: sourceInventory,
+      dataPolicy: { ...base, include: [...base.include, entry] },
+    }),
+    /duplicate/iu,
+  );
 });
 
 test("inventory fingerprint pins structure but ignores volatile size estimates", () => {
@@ -144,18 +228,76 @@ test("blocks an included-to-excluded FK until the dependency is documented", () 
   );
 });
 
+test("allows included references to preseeded catalogs but blocks the inverse", () => {
+  const names = [
+    "public.parent",
+    "public.child",
+    "public.seeded",
+    ...REQUIRED_EXCLUSIONS,
+  ];
+  const preseeded = [{
+    table: "public.seeded",
+    reason: "Created and populated by the reviewed schema migration.",
+    migration: "20260912034515_catalogos.sql",
+    orderBy: ["seeded_id"],
+    ownedSequences: ["public.seeded_seeded_id_seq"],
+  }];
+  const build = (foreignKeys) => {
+    const sourceInventory = inventory(names, foreignKeys);
+    return {
+      inventory: sourceInventory,
+      dataPolicy: policy(sourceInventory, {
+        contractVersion: 2,
+        include: [
+          { table: "public.parent", reason: "Territorial canonical data." },
+          { table: "public.child", reason: "Territorial dependent data." },
+        ],
+        preseeded,
+      }),
+    };
+  };
+
+  assert.doesNotThrow(() => classifySourceTables(build([{
+    name: "child_seeded_fk",
+    fromTable: "public.child",
+    toTable: "public.seeded",
+  }])));
+  assert.throws(
+    () => classifySourceTables(build([{
+      name: "seeded_parent_fk",
+      fromTable: "public.seeded",
+      toTable: "public.parent",
+    }])),
+    /preseeded.*foreign key|foreign key.*preseeded/iu,
+  );
+});
+
 test("pins the reviewed SIPEEM-DEV inventory policy", async () => {
   const reviewed = JSON.parse(
     await readFile("infra/territorial/data-policy.json", "utf8"),
   );
   assert.equal(reviewed.sourceInventorySha256, "5f6199fd6d1de9036149afabf6b377e395c460b3c8c30641aac48ef7c988d9d9");
+  assert.equal(reviewed.contractVersion, 2);
   assert.equal(reviewed.sourceSnapshot.tableCount, 66);
-  assert.equal(reviewed.include.length, 63);
+  assert.equal(reviewed.include.length, 57);
   assert.deepEqual(
     reviewed.exclude.map(({ table }) => table).sort(),
     [...REQUIRED_EXCLUSIONS].sort(),
   );
-  const names = [...reviewed.include, ...reviewed.exclude].map(({ table }) => table);
+  assert.deepEqual(
+    reviewed.preseeded.map(({ table }) => table).sort(),
+    [
+      "public.cat_estados_evento",
+      "public.cat_estados_georreferenciacion",
+      "public.cat_fuentes_evento",
+      "public.cat_niveles_sensibilidad",
+      "public.cat_tipos_asentamiento",
+      "public.cat_tipos_fuerza_electoral",
+    ],
+  );
+  assert.ok(reviewed.include.some(({ table }) => table === "public.fuerzas_electorales"));
+  const names = [...reviewed.include, ...reviewed.exclude, ...reviewed.preseeded]
+    .map(({ table }) => table);
   assert.equal(new Set(names).size, 66);
 });
 

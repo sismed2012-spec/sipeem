@@ -4,6 +4,9 @@ import { SOURCE_PROJECT_REF } from "./policy.mjs";
 
 const SHA256 = /^[a-f0-9]{64}$/u;
 const TABLE_NAME = /^public\.[a-z_][a-z0-9_$]*$/u;
+const MIGRATION_NAME = /^202609\d{8}_[a-z0-9_]+\.sql$/u;
+const COLUMN_NAME = /^[a-z_][a-z0-9_$]*$/u;
+const SEQUENCE_NAME = /^public\.[a-z_][a-z0-9_$]*_seq$/u;
 const REQUIRED_EXCLUSIONS = new Set([
   "public.staging_electoral_incidencias",
   "public.staging_electoral_registros",
@@ -66,6 +69,28 @@ function validatePolicyEntry(entry, category) {
   }
 }
 
+function validatePreseededEntry(entry) {
+  validatePolicyEntry(entry, "preseeded");
+  if (!MIGRATION_NAME.test(entry.migration ?? "")) {
+    throw new Error(`Preseeded table ${entry.table} requires a reviewed migration`);
+  }
+  if (
+    !Array.isArray(entry.orderBy) ||
+    entry.orderBy.length === 0 ||
+    entry.orderBy.some((column) => !COLUMN_NAME.test(column)) ||
+    new Set(entry.orderBy).size !== entry.orderBy.length
+  ) {
+    throw new Error(`Preseeded table ${entry.table} requires unique canonical order columns`);
+  }
+  if (
+    !Array.isArray(entry.ownedSequences) ||
+    entry.ownedSequences.some((sequence) => !SEQUENCE_NAME.test(sequence)) ||
+    new Set(entry.ownedSequences).size !== entry.ownedSequences.length
+  ) {
+    throw new Error(`Preseeded table ${entry.table} requires reviewed public sequences`);
+  }
+}
+
 function dependencyIsDocumented(entry, foreignKey) {
   return (entry.documentedIncomingDependencies ?? []).some(
     (dependency) =>
@@ -79,7 +104,7 @@ function dependencyIsDocumented(entry, foreignKey) {
 export function classifySourceTables({ inventory, dataPolicy }) {
   const actualFingerprint = computeInventoryFingerprint(inventory);
   if (
-    dataPolicy?.contractVersion !== 1 ||
+    ![1, 2].includes(dataPolicy?.contractVersion) ||
     !SHA256.test(dataPolicy.sourceInventorySha256 ?? "")
   ) {
     throw new Error("Invalid data policy contract or inventory fingerprint");
@@ -90,9 +115,15 @@ export function classifySourceTables({ inventory, dataPolicy }) {
   if (dataPolicy.sourceInventorySha256 !== actualFingerprint) {
     throw new Error("Source inventory fingerprint does not match the reviewed policy");
   }
-  if (!Array.isArray(dataPolicy.include) || !Array.isArray(dataPolicy.exclude)) {
-    throw new Error("Data policy must define include and exclude arrays");
+  if (
+    !Array.isArray(dataPolicy.include) ||
+    !Array.isArray(dataPolicy.exclude) ||
+    (dataPolicy.contractVersion === 2 && !Array.isArray(dataPolicy.preseeded)) ||
+    (dataPolicy.contractVersion === 1 && dataPolicy.preseeded !== undefined)
+  ) {
+    throw new Error("Data policy must define arrays supported by its contract version");
   }
+  const preseeded = dataPolicy.contractVersion === 2 ? dataPolicy.preseeded : [];
 
   const observed = new Set();
   for (const table of inventory.tables) {
@@ -106,9 +137,11 @@ export function classifySourceTables({ inventory, dataPolicy }) {
   for (const [category, entries] of [
     ["include", dataPolicy.include],
     ["exclude", dataPolicy.exclude],
+    ["preseeded", preseeded],
   ]) {
     for (const entry of entries) {
-      validatePolicyEntry(entry, category);
+      if (category === "preseeded") validatePreseededEntry(entry);
+      else validatePolicyEntry(entry, category);
       if (classified.has(entry.table)) {
         throw new Error(`Duplicate data policy table: ${entry.table}`);
       }
@@ -138,17 +171,29 @@ export function classifySourceTables({ inventory, dataPolicy }) {
         );
       }
     }
+    if (from?.category === "preseeded" && to?.category !== "preseeded") {
+      throw new Error(
+        `Foreign key ${foreignKey.name} crosses preseeded ${foreignKey.fromTable} to ${foreignKey.toTable}`,
+      );
+    }
   }
 
+  const excluded = [...classified]
+    .filter(([, value]) => value.category === "exclude")
+    .map(([table]) => table)
+    .sort();
+  const preseededEntries = [...classified]
+    .filter(([, value]) => value.category === "preseeded")
+    .map(([, value]) => structuredClone(value.entry))
+    .sort((left, right) => left.table.localeCompare(right.table));
   return {
     include: [...classified]
       .filter(([, value]) => value.category === "include")
       .map(([table]) => table)
       .sort(),
-    exclude: [...classified]
-      .filter(([, value]) => value.category === "exclude")
-      .map(([table]) => table)
-      .sort(),
+    exclude: excluded,
+    preseeded: preseededEntries,
+    excludedFromDump: [...excluded, ...preseededEntries.map(({ table }) => table)].sort(),
     inventorySha256: actualFingerprint,
   };
 }

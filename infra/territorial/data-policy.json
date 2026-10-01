@@ -1,5 +1,5 @@
 {
-  "contractVersion": 1,
+  "contractVersion": 2,
   "sourceProjectRef": "nppvprbfmjbhwheghipa",
   "sourceInventorySha256": "5f6199fd6d1de9036149afabf6b377e395c460b3c8c30641aac48ef7c988d9d9",
   "sourceSnapshot": {
@@ -31,12 +31,6 @@
     { "table": "public.cartografia_secciones_equivalencias", "reason": "Canonical section equivalence history." },
     { "table": "public.cartografia_versiones", "reason": "Canonical cartography version registry." },
     { "table": "public.cartografia_versiones_bitacora", "reason": "Canonical cartography audit trail." },
-    { "table": "public.cat_estados_evento", "reason": "Territorial event catalog." },
-    { "table": "public.cat_estados_georreferenciacion", "reason": "Territorial georeferencing catalog." },
-    { "table": "public.cat_fuentes_evento", "reason": "Territorial event-source catalog." },
-    { "table": "public.cat_niveles_sensibilidad", "reason": "Territorial sensitivity catalog." },
-    { "table": "public.cat_tipos_asentamiento", "reason": "Territorial settlement-type catalog." },
-    { "table": "public.cat_tipos_fuerza_electoral", "reason": "Electoral-force type catalog." },
     { "table": "public.demografia_cargas_lotes", "reason": "Canonical demographic load ledger." },
     { "table": "public.demografia_eceg_correspondencias", "reason": "Canonical ECEG section correspondence." },
     { "table": "public.demografia_eceg_secciones", "reason": "Canonical ECEG section indicators." },
@@ -95,6 +89,50 @@
           "reason": "The nullable source-trace pointer is non-canonical provenance; restore handling must preserve the official result while not requiring transient staging rows."
         }
       ]
+    }
+  ],
+  "preseeded": [
+    {
+      "table": "public.cat_estados_evento",
+      "reason": "Created and populated by the reviewed territorial catalog migration.",
+      "migration": "20260912034515_catalogos.sql",
+      "orderBy": ["estado_evento_id"],
+      "ownedSequences": ["public.cat_estados_evento_estado_evento_id_seq"]
+    },
+    {
+      "table": "public.cat_estados_georreferenciacion",
+      "reason": "Created and populated by the reviewed territorial catalog migration.",
+      "migration": "20260912034515_catalogos.sql",
+      "orderBy": ["estado_geo_id"],
+      "ownedSequences": ["public.cat_estados_georreferenciacion_estado_geo_id_seq"]
+    },
+    {
+      "table": "public.cat_fuentes_evento",
+      "reason": "Created and populated by the reviewed territorial catalog migration.",
+      "migration": "20260912034515_catalogos.sql",
+      "orderBy": ["fuente_evento_id"],
+      "ownedSequences": ["public.cat_fuentes_evento_fuente_evento_id_seq"]
+    },
+    {
+      "table": "public.cat_niveles_sensibilidad",
+      "reason": "Created and populated by the reviewed territorial catalog migration.",
+      "migration": "20260912034515_catalogos.sql",
+      "orderBy": ["nivel"],
+      "ownedSequences": []
+    },
+    {
+      "table": "public.cat_tipos_asentamiento",
+      "reason": "Created and populated by the reviewed territorial catalog migration.",
+      "migration": "20260912034515_catalogos.sql",
+      "orderBy": ["tipo_asentamiento_id"],
+      "ownedSequences": ["public.cat_tipos_asentamiento_tipo_asentamiento_id_seq"]
+    },
+    {
+      "table": "public.cat_tipos_fuerza_electoral",
+      "reason": "Created and populated by the reviewed electoral-force migration.",
+      "migration": "20260912045859_fuerzas_electorales.sql",
+      "orderBy": ["tipo_fuerza_id"],
+      "ownedSequences": ["public.cat_tipos_fuerza_electoral_tipo_fuerza_id_seq"]
     }
   ]
 }
