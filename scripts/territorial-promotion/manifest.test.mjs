@@ -6,9 +6,12 @@ import { after, beforeEach, test } from "node:test";
 
 import {
   buildPromotionManifest,
+  buildRecoveryManifest,
   loadPromotionManifest,
+  validateRecoveryManifest,
   validatePromotionManifest,
 } from "./manifest.mjs";
+import { createJournal, transitionJournal } from "./journal.mjs";
 import { SOURCE_PROJECT_REF, TARGET_PROJECT_REF } from "./policy.mjs";
 
 const SOURCE_COMMIT = "a".repeat(40);
@@ -67,6 +70,48 @@ async function buildManifest(overrides = {}) {
     migrationDirectory: "infra/territorial/supabase/migrations",
     dataPolicy: { include: [], exclude: [] },
     expectations: EXPECTATIONS,
+    ...overrides,
+  });
+}
+
+function failedPredecessorJournal(predecessor) {
+  let journal = createJournal({
+    manifestSha256: predecessor.manifestSha256,
+    sourceCommit: predecessor.sourceCommit,
+    sourceRef: predecessor.source.projectRef,
+    targetRef: predecessor.target.projectRef,
+  });
+  for (const to of [
+    "PREFLIGHT_PASSED",
+    "SCHEMA_APPLYING",
+    "SCHEMA_APPLIED",
+    "DATA_APPLYING",
+    "FAILED_CONFIRMED",
+  ]) {
+    journal = transitionJournal(journal, { to, evidenceSha256: "e".repeat(64) });
+  }
+  return journal;
+}
+
+async function buildRecovery(overrides = {}) {
+  const predecessorManifest = await buildManifest();
+  const predecessorJournal = failedPredecessorJournal(predecessorManifest);
+  return buildRecoveryManifest({
+    repoRoot,
+    promotionId: "sipeem-territorial-prod-recovery-2026-10-01-01",
+    createdAt: "2026-10-01T19:00:00.000Z",
+    sourceCommit: "c".repeat(40),
+    sourceRef: SOURCE_PROJECT_REF,
+    targetRef: TARGET_PROJECT_REF,
+    sourcePostgres: "17.6",
+    targetPostgres: "17.6",
+    migrationDirectory: "infra/territorial/supabase/migrations",
+    dataPolicy: { contractVersion: 2, include: [], exclude: [], preseeded: [] },
+    expectations: EXPECTATIONS,
+    predecessorManifest,
+    predecessorJournal,
+    rollbackEvidenceSha256: "d".repeat(64),
+    preseededEvidenceSha256: "f".repeat(64),
     ...overrides,
   });
 }
@@ -154,4 +199,77 @@ test("rejects secrets and loads only a fully validated JSON manifest", async () 
   });
   assert.deepEqual(loaded, manifest);
   assert.equal((await readFile(manifestPath, "utf8")).endsWith("\n"), true);
+});
+
+test("builds a distinct immutable DATA_RECOVERY manifest linked to terminal evidence", async () => {
+  const predecessorManifest = await buildManifest();
+  const recovery = await buildRecovery({
+    predecessorManifest,
+    predecessorJournal: failedPredecessorJournal(predecessorManifest),
+  });
+
+  assert.equal(recovery.contractVersion, 2);
+  assert.equal(recovery.mode, "DATA_RECOVERY");
+  assert.equal(recovery.recovery.predecessorManifestSha256, predecessorManifest.manifestSha256);
+  assert.equal(recovery.recovery.predecessorTerminalState, "FAILED_CONFIRMED");
+  assert.equal(recovery.recovery.cause, "PRESEEDED_TABLE_COLLISION");
+  assert.equal(recovery.recovery.rollbackEvidenceSha256, "d".repeat(64));
+  assert.equal(recovery.recovery.preseededEvidenceSha256, "f".repeat(64));
+  assert.deepEqual(recovery.migrations, predecessorManifest.migrations);
+  assert.deepEqual(recovery.expectations, predecessorManifest.expectations);
+  assert.notEqual(recovery.manifestSha256, predecessorManifest.manifestSha256);
+  assert.doesNotMatch(JSON.stringify(recovery), /password|service.?role|token|postgresql:\/\//iu);
+});
+
+test("rejects invalid or mismatched recovery predecessors and evidence", async () => {
+  const predecessorManifest = await buildManifest();
+  const predecessorJournal = failedPredecessorJournal(predecessorManifest);
+  let nonterminal = createJournal({
+    manifestSha256: predecessorManifest.manifestSha256,
+    sourceCommit: predecessorManifest.sourceCommit,
+    sourceRef: SOURCE_PROJECT_REF,
+    targetRef: TARGET_PROJECT_REF,
+  });
+  nonterminal = transitionJournal(nonterminal, {
+    to: "PREFLIGHT_PASSED",
+    evidenceSha256: "e".repeat(64),
+  });
+
+  for (const [overrides, expected] of [
+    [{ predecessorManifest: null }, /predecessor/iu],
+    [{ predecessorJournal: nonterminal }, /failed_confirmed|terminal/iu],
+    [{ predecessorJournal: { ...predecessorJournal, manifestSha256: "1".repeat(64) } }, /journal|manifest/iu],
+    [{ rollbackEvidenceSha256: "bad" }, /evidence|sha/iu],
+    [{ preseededEvidenceSha256: "bad" }, /evidence|sha/iu],
+    [{ sourceRef: TARGET_PROJECT_REF }, /source project/iu],
+    [{ targetRef: SOURCE_PROJECT_REF }, /target project/iu],
+    [{ dataPolicy: { contractVersion: 2, password: "do-not-store" } }, /secret|credential/iu],
+  ]) {
+    await assert.rejects(buildRecovery(overrides), expected);
+  }
+});
+
+test("validates recovery only through an exact loaded predecessor", async () => {
+  const predecessorManifest = await buildManifest();
+  const predecessorJournal = failedPredecessorJournal(predecessorManifest);
+  const recovery = await buildRecovery({ predecessorManifest, predecessorJournal });
+  const context = {
+    repoRoot,
+    currentCommit: "d".repeat(40),
+    isAncestor: async (ancestor, current) =>
+      ancestor === recovery.sourceCommit && current === "d".repeat(40),
+    loadPredecessor: async () => ({ predecessorManifest, predecessorJournal }),
+  };
+
+  await assert.doesNotReject(validateRecoveryManifest(recovery, context));
+  await assert.rejects(
+    validateRecoveryManifest(recovery, { ...context, loadPredecessor: undefined }),
+    /predecessor/iu,
+  );
+  await writeFile(
+    path.join(repoRoot, ...recovery.migrations[0].path.split("/")),
+    "select 999;\n",
+    "utf8",
+  );
+  await assert.rejects(validateRecoveryManifest(recovery, context), /migration hash/iu);
 });

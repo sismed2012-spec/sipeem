@@ -6,6 +6,7 @@ import { after, test } from "node:test";
 
 import {
   createJournal,
+  createRecoveryJournal,
   loadJournal,
   saveJournalAtomically,
   transitionJournal,
@@ -129,4 +130,57 @@ test("persists atomically and rejects a journal for another identity", async () 
       /journal identity/i,
     );
   }
+});
+
+test("advances a recovery journal through schema adoption without reopening the predecessor", () => {
+  let journal = createRecoveryJournal({
+    manifestSha256: MANIFEST_SHA,
+    sourceCommit: SOURCE_COMMIT,
+    sourceRef: SOURCE_PROJECT_REF,
+    targetRef: TARGET_PROJECT_REF,
+    predecessorManifestSha256: "d".repeat(64),
+  });
+  for (const to of [
+    "PREFLIGHT_PASSED",
+    "SCHEMA_ADOPTING",
+    "SCHEMA_APPLIED",
+    "DATA_APPLYING",
+    "DATA_APPLIED",
+    "VERIFYING",
+    "VERIFIED",
+  ]) journal = advance(journal, to);
+
+  assert.equal(journal.contractVersion, 2);
+  assert.equal(journal.mode, "DATA_RECOVERY");
+  assert.equal(journal.predecessorManifestSha256, "d".repeat(64));
+  assert.equal(journal.state, "VERIFIED");
+  assert.deepEqual(journal.entries.map(({ to }) => to), [
+    "CREATED",
+    "PREFLIGHT_PASSED",
+    "SCHEMA_ADOPTING",
+    "SCHEMA_APPLIED",
+    "DATA_APPLYING",
+    "DATA_APPLIED",
+    "VERIFYING",
+    "VERIFIED",
+  ]);
+});
+
+test("keeps legacy and recovery schema paths mutually exclusive", () => {
+  const legacy = advance(freshJournal(), "PREFLIGHT_PASSED");
+  assert.throws(() => advance(legacy, "SCHEMA_ADOPTING"), /invalid transition/i);
+
+  let recovery = createRecoveryJournal({
+    manifestSha256: MANIFEST_SHA,
+    sourceCommit: SOURCE_COMMIT,
+    sourceRef: SOURCE_PROJECT_REF,
+    targetRef: TARGET_PROJECT_REF,
+    predecessorManifestSha256: "d".repeat(64),
+  });
+  recovery = advance(recovery, "PREFLIGHT_PASSED");
+  assert.throws(() => advance(recovery, "SCHEMA_APPLYING"), /invalid transition/i);
+
+  recovery = advance(recovery, "SCHEMA_ADOPTING");
+  recovery = advance(recovery, "FAILED_CONFIRMED");
+  assert.throws(() => advance(recovery, "SCHEMA_APPLIED"), /invalid transition/i);
 });
