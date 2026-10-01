@@ -166,8 +166,7 @@ export async function runReadOnlyPreflight({
   const compatibilityFile =
     "infra/territorial/supabase/tests/promotion_pg17_compatibility.sql";
 
-  const [auditResult, docker, psql, rawPreflight, rawCompatibility] =
-    await Promise.all([
+  const [auditResult, docker, psql] = await Promise.all([
       captureDependency(
         () => deps.auditMigrations({ migrationDir, exceptions }),
         (message) => ({ passed: false, errors: [{ message }], warnings: [] }),
@@ -180,15 +179,15 @@ export async function runReadOnlyPreflight({
         () => deps.psqlHealth(),
         (detail) => ({ available: false, detail }),
       ),
-      captureDependency(
-        () => deps.queryProject({ projectRef, sqlFile: preflightFile, repoRoot }),
-        (stderr) => ({ exitCode: null, stdout: "", stderr }),
-      ),
-      captureDependency(
-        () => deps.queryProject({ projectRef, sqlFile: compatibilityFile, repoRoot }),
-        (stderr) => ({ exitCode: null, stdout: "", stderr }),
-      ),
     ]);
+  const rawPreflight = await captureDependency(
+    () => deps.queryProject({ projectRef, sqlFile: preflightFile, repoRoot }),
+    (stderr) => ({ exitCode: null, stdout: "", stderr }),
+  );
+  const rawCompatibility = await captureDependency(
+    () => deps.queryProject({ projectRef, sqlFile: compatibilityFile, repoRoot }),
+    (stderr) => ({ exitCode: null, stdout: "", stderr }),
+  );
 
   const issues = [];
   if (!auditResult?.passed) {

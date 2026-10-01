@@ -153,6 +153,36 @@ test("isolates missing psql to data transfer without blocking schema", async () 
   assert.ok(result.issues.some(({ code, scope }) => code === "PSQL_UNAVAILABLE" && scope === "data"));
 });
 
+test("serializes the two Supabase probes for one project", async () => {
+  let inFlight = 0;
+  let maxInFlight = 0;
+  const result = await runReadOnlyPreflight({
+    role: "target",
+    projectRef: TARGET_PROJECT_REF,
+    manifest: manifest(),
+    migrationDir: "migrations",
+    exceptions: [],
+    dependencies: {
+      auditMigrations: async () => ({ passed: true, errors: [], warnings: [] }),
+      dockerHealth: async () => ({ available: true, detail: "healthy" }),
+      psqlHealth: async () => ({ available: true, detail: "17.11" }),
+      queryProject: async ({ sqlFile }) => {
+        inFlight += 1;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        await new Promise((resolve) => setImmediate(resolve));
+        inFlight -= 1;
+        const payload = sqlFile.endsWith("promotion_preflight.sql")
+          ? report(TARGET_PROJECT_REF)
+          : compatibility();
+        return { exitCode: 0, stdout: JSON.stringify(payload), stderr: "" };
+      },
+    },
+  });
+
+  assert.equal(result.schemaSimulation.status, "PASSED");
+  assert.equal(maxInFlight, 1);
+});
+
 test("blocks a source whose territorial objects or manifest counts drift", async () => {
   const deps = dependencies({
     projectRef: SOURCE_PROJECT_REF,
