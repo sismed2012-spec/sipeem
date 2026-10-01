@@ -1,10 +1,10 @@
 import { createHash } from "node:crypto";
-import { readFile, rename, writeFile } from "node:fs/promises";
+import { readFile, readdir, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { buildDumpPlan, createDataArtifact, restoreDataArtifactOnce } from "./database-transfer.mjs";
-import { createJournal, loadJournal, saveJournalAtomically, transitionJournal } from "./journal.mjs";
+import { createJournal, createRecoveryJournal, loadJournal, saveJournalAtomically, transitionJournal } from "./journal.mjs";
 import { loadPromotionManifest } from "./manifest.mjs";
 import {
   SOURCE_PROJECT_REF,
@@ -14,20 +14,25 @@ import {
   buildSupabaseInvocation,
 } from "./policy.mjs";
 import { runReadOnlyPreflight } from "./preflight.mjs";
+import { adoptRecoverySchema, runRecoveryPreflight } from "./recovery.mjs";
 import { redactSensitiveText, runProcessOnce } from "./process.mjs";
 import { applySchemaPromotionOnce, planSchemaPromotion } from "./schema.mjs";
 import { verifyPromotion } from "./verification.mjs";
 
 const COMMANDS = new Set([
   "preflight",
+  "recovery-preflight",
   "schema-plan",
   "schema-apply",
+  "schema-adopt",
   "data-plan",
   "data-apply",
   "verify",
   "status",
 ]);
 const WRITE_COMMANDS = new Set(["schema-apply", "data-apply"]);
+const LEGACY_COMMANDS = new Set(["preflight", "schema-plan", "schema-apply", "data-plan", "data-apply", "verify", "status"]);
+const RECOVERY_COMMANDS = new Set(["recovery-preflight", "schema-adopt", "data-plan", "data-apply", "verify", "status"]);
 const OPTIONS = new Map([
   ["--manifest", "manifestPath"],
   ["--confirm", "confirmation"],
@@ -121,12 +126,13 @@ async function writeJsonAtomically(filePath, value) {
   await rename(temporaryPath, filePath);
 }
 
-function runtimePaths(repoRoot, manifest) {
+export function runtimePaths(repoRoot, manifest) {
   const root = path.join(repoRoot, "infra", "territorial");
   return {
     journal: path.join(root, "journals", `${manifest.manifestSha256}.json`),
     artifact: path.join(root, "artifacts", manifest.manifestSha256, "territorial-data.sql"),
     artifactMetadata: path.join(root, "artifacts", manifest.manifestSha256, "artifact.json"),
+    failureEvidence: path.join(root, "artifacts", manifest.manifestSha256, "failure.json"),
   };
 }
 
@@ -156,6 +162,12 @@ async function loadExistingJournal(journalPath, manifest) {
       sourceCommit: manifest.sourceCommit,
       sourceRef: manifest.source.projectRef,
       targetRef: manifest.target.projectRef,
+      ...(manifest.contractVersion === 2
+        ? {
+            mode: manifest.mode,
+            predecessorManifestSha256: manifest.recovery?.predecessorManifestSha256,
+          }
+        : {}),
     });
   } catch (error) {
     if (error?.code === "ENOENT") return null;
@@ -163,10 +175,10 @@ async function loadExistingJournal(journalPath, manifest) {
   }
 }
 
-function nextAction(state) {
+function nextAction(state, manifest) {
   return {
-    CREATED: "preflight",
-    PREFLIGHT_PASSED: "schema-plan",
+    CREATED: manifest?.contractVersion === 2 ? "recovery-preflight" : "preflight",
+    PREFLIGHT_PASSED: manifest?.contractVersion === 2 ? "schema-adopt" : "schema-plan",
     SCHEMA_APPLIED: "data-plan",
     DATA_APPLIED: "verify",
     VERIFIED: "preview-cutover",
@@ -177,6 +189,21 @@ function nextAction(state) {
 }
 
 function createDefaultDependencies(repoRoot = process.cwd()) {
+  const loadPredecessor = async (expectedHash) => {
+    const directory = path.join(repoRoot, "infra", "territorial", "manifests", "production");
+    const candidates = [];
+    for (const name of (await readdir(directory)).filter((value) => value.endsWith(".json")).sort()) {
+      const candidate = JSON.parse(await readFile(path.join(directory, name), "utf8"));
+      if (candidate?.manifestSha256 === expectedHash) candidates.push(candidate);
+    }
+    if (candidates.length !== 1) {
+      throw new Error("Recovery predecessor manifest is missing or ambiguous");
+    }
+    const predecessorJournal = JSON.parse(
+      await readFile(path.join(repoRoot, "infra", "territorial", "journals", `${expectedHash}.json`), "utf8"),
+    );
+    return { predecessorManifest: candidates[0], predecessorJournal };
+  };
   const loadManifest = async (manifestPath) => {
     const currentCommit = await runGit(repoRoot, ["rev-parse", "HEAD"]);
     return loadPromotionManifest(path.resolve(repoRoot, manifestPath), {
@@ -190,10 +217,54 @@ function createDefaultDependencies(repoRoot = process.cwd()) {
         });
         return result.exitCode === 0;
       },
+      loadPredecessor,
     });
   };
 
   const commands = {
+    "recovery-preflight": async ({ manifest }) => {
+      const paths = runtimePaths(repoRoot, manifest);
+      const exceptionConfig = JSON.parse(
+        await readFile(path.join(repoRoot, "infra", "territorial", "security-exceptions.json"), "utf8"),
+      );
+      let journal = await loadExistingJournal(paths.journal, manifest);
+      if (!journal) {
+        journal = createRecoveryJournal({
+          manifestSha256: manifest.manifestSha256,
+          sourceCommit: manifest.sourceCommit,
+          sourceRef: manifest.source.projectRef,
+          targetRef: manifest.target.projectRef,
+          predecessorManifestSha256: manifest.recovery.predecessorManifestSha256,
+        });
+      }
+      if (journal.state === "PREFLIGHT_PASSED") {
+        return { status: "PASSED", state: journal.state, nextAction: nextAction(journal.state, manifest) };
+      }
+      if (!["CREATED", "BLOCKED"].includes(journal.state)) {
+        return { status: "BLOCKED", state: journal.state, nextAction: nextAction(journal.state, manifest) };
+      }
+      const result = await runRecoveryPreflight({
+        manifest,
+        migrationDir: path.join(repoRoot, "infra", "territorial", "supabase", "migrations"),
+        exceptions: exceptionConfig.exceptions,
+        repoRoot,
+      });
+      if (journal.state === "CREATED" || result.status === "PASSED") {
+        journal = transitionJournal(journal, {
+          to: result.status === "PASSED" ? "PREFLIGHT_PASSED" : "BLOCKED",
+          evidenceSha256: result.evidenceSha256,
+          probeResolution: journal.state === "BLOCKED" ? "recovery-preflight-reprobe" : null,
+        });
+        await saveJournalAtomically(paths.journal, journal);
+      }
+      return {
+        status: result.status,
+        state: journal.state,
+        issues: result.issues,
+        evidenceSha256: result.evidenceSha256,
+        nextAction: nextAction(journal.state, manifest),
+      };
+    },
     preflight: async ({ manifest }) => {
       const paths = runtimePaths(repoRoot, manifest);
       const exceptionConfig = JSON.parse(
@@ -235,7 +306,7 @@ function createDefaultDependencies(repoRoot = process.cwd()) {
         source: source.status,
         target: target.status,
         dataTransfer: source.dataTransfer.status === "PASSED" && target.dataTransfer.status === "PASSED" ? "PASSED" : "BLOCKED",
-        nextAction: nextAction(journal.state),
+        nextAction: nextAction(journal.state, manifest),
       };
     },
     "schema-plan": async ({ manifest }) => {
@@ -264,7 +335,32 @@ function createDefaultDependencies(repoRoot = process.cwd()) {
           persistJournal: (value) => saveJournalAtomically(paths.journal, value),
         },
       });
-      return { status: next.state, state: next.state, nextAction: nextAction(next.state) };
+      return { status: next.state, state: next.state, nextAction: nextAction(next.state, manifest) };
+    },
+    "schema-adopt": async ({ manifest }) => {
+      const paths = runtimePaths(repoRoot, manifest);
+      const journal = await loadExistingJournal(paths.journal, manifest);
+      if (!journal) return { status: "BLOCKED", reason: "journal missing" };
+      const exceptionConfig = JSON.parse(
+        await readFile(path.join(repoRoot, "infra", "territorial", "security-exceptions.json"), "utf8"),
+      );
+      const result = await adoptRecoverySchema({
+        manifest,
+        journal,
+        migrationDir: path.join(repoRoot, "infra", "territorial", "supabase", "migrations"),
+        exceptions: exceptionConfig.exceptions,
+        repoRoot,
+        dependencies: {
+          persistJournal: (value) => saveJournalAtomically(paths.journal, value),
+        },
+      });
+      return {
+        status: result.status,
+        state: result.journal.state,
+        issues: result.issues,
+        evidenceSha256: result.evidenceSha256,
+        nextAction: nextAction(result.journal.state, manifest),
+      };
     },
     "data-plan": async ({ manifest }) => {
       const paths = runtimePaths(repoRoot, manifest);
@@ -312,7 +408,20 @@ function createDefaultDependencies(repoRoot = process.cwd()) {
           }),
         },
       });
-      return { status: next.state, state: next.state, nextAction: nextAction(next.state) };
+      let failure = null;
+      if (["FAILED_CONFIRMED", "FAILED_UNKNOWN"].includes(next.state)) {
+        try {
+          failure = JSON.parse(await readFile(paths.failureEvidence, "utf8"));
+        } catch (error) {
+          if (error?.code !== "ENOENT") throw error;
+        }
+      }
+      return {
+        status: next.state,
+        state: next.state,
+        failure,
+        nextAction: nextAction(next.state, manifest),
+      };
     },
     verify: async ({ manifest }) => {
       const paths = runtimePaths(repoRoot, manifest);
@@ -332,19 +441,25 @@ function createDefaultDependencies(repoRoot = process.cwd()) {
         state: result.journal.state,
         evidenceSha256: result.evidenceSha256,
         issues: result.issues,
-        nextAction: nextAction(result.journal.state),
+        nextAction: nextAction(result.journal.state, manifest),
       };
     },
     status: async ({ manifest }) => {
       const paths = runtimePaths(repoRoot, manifest);
       const journal = await loadExistingJournal(paths.journal, manifest);
-      if (!journal) return { status: "BLOCKED", reason: "journal missing", nextAction: "preflight" };
+      if (!journal) {
+        return {
+          status: "BLOCKED",
+          reason: "journal missing",
+          nextAction: nextAction("CREATED", manifest),
+        };
+      }
       return {
         status: journal.state,
         state: journal.state,
         manifestSha256: journal.manifestSha256,
         updatedAt: journal.updatedAt,
-        nextAction: nextAction(journal.state),
+        nextAction: nextAction(journal.state, manifest),
       };
     },
   };
@@ -364,6 +479,12 @@ export async function runPromotionCommand({ argv, dependencies = {} }) {
   };
   if (typeof active.loadManifest !== "function") throw new Error("Promotion manifest loader is unavailable");
   const manifest = await active.loadManifest(parsed.manifestPath);
+  const allowed = manifest?.contractVersion === 2 ? RECOVERY_COMMANDS : LEGACY_COMMANDS;
+  if (!allowed.has(parsed.command)) {
+    throw new Error(
+      `Command ${parsed.command} is not allowed for manifest contract ${String(manifest?.contractVersion)}`,
+    );
+  }
   assertProjectRole({
     projectRef: manifest?.source?.projectRef,
     role: "source",

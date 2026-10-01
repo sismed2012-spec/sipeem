@@ -184,3 +184,26 @@ test("keeps legacy and recovery schema paths mutually exclusive", () => {
   recovery = advance(recovery, "FAILED_CONFIRMED");
   assert.throws(() => advance(recovery, "SCHEMA_APPLIED"), /invalid transition/i);
 });
+
+test("persists and reloads the complete recovery identity", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "recovery-journal-"));
+  temporaryDirectories.push(directory);
+  const filePath = path.join(directory, "journal.json");
+  const journal = createRecoveryJournal({
+    manifestSha256: MANIFEST_SHA,
+    sourceCommit: SOURCE_COMMIT,
+    sourceRef: SOURCE_PROJECT_REF,
+    targetRef: TARGET_PROJECT_REF,
+    predecessorManifestSha256: "d".repeat(64),
+  });
+  await saveJournalAtomically(filePath, journal);
+  const loaded = await loadJournal(filePath, {
+    manifestSha256: MANIFEST_SHA,
+    sourceCommit: SOURCE_COMMIT,
+    sourceRef: SOURCE_PROJECT_REF,
+    targetRef: TARGET_PROJECT_REF,
+    mode: "DATA_RECOVERY",
+    predecessorManifestSha256: "d".repeat(64),
+  });
+  assert.deepEqual(loaded, journal);
+});

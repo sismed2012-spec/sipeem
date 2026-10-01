@@ -17,6 +17,7 @@
     "territorial:layout:check": "node scripts/territorial-promotion/layout.mjs --check",
     "territorial:test": "node --test scripts/territorial-promotion/*.test.mjs",
     "territorial:promote": "node scripts/territorial-promotion/cli.mjs",
+    "territorial:freeze-recovery": "node scripts/territorial-promotion/freeze-recovery-manifest.mjs",
     "territorial:verify": "node scripts/territorial-promotion/cli.mjs verify",
     "seed": "npx tsx scripts/seed.ts",
     "import:municipal-oficial": "node scripts/import-municipal-oficial.mjs"

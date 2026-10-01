@@ -2,17 +2,27 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { SOURCE_PROJECT_REF, TARGET_PROJECT_REF } from "./policy.mjs";
-import { parsePromotionArgs, runPromotionCommand } from "./cli.mjs";
+import { parsePromotionArgs, runPromotionCommand, runtimePaths } from "./cli.mjs";
 
 const MANIFEST_SHA = "a".repeat(64);
 
 function manifest(overrides = {}) {
   return {
+    contractVersion: 1,
     manifestSha256: MANIFEST_SHA,
     source: { projectRef: SOURCE_PROJECT_REF },
     target: { projectRef: TARGET_PROJECT_REF },
     ...overrides,
   };
+}
+
+function recoveryManifest(overrides = {}) {
+  return manifest({
+    contractVersion: 2,
+    mode: "DATA_RECOVERY",
+    recovery: { predecessorManifestSha256: "b".repeat(64) },
+    ...overrides,
+  });
 }
 
 test("requires one explicit supported subcommand and manifest", () => {
@@ -28,11 +38,13 @@ test("requires one explicit supported subcommand and manifest", () => {
   }
 });
 
-test("parses all seven commands and allows confirmation only for writes", () => {
+test("parses all legacy and recovery commands and allows confirmation only for writes", () => {
   const commands = [
     "preflight",
+    "recovery-preflight",
     "schema-plan",
     "schema-apply",
+    "schema-adopt",
     "data-plan",
     "data-apply",
     "verify",
@@ -75,7 +87,7 @@ test("rejects arbitrary project references and incorrect confirmations", async (
   );
 });
 
-test("dispatches every command once and marks only apply commands writable", async () => {
+test("dispatches every legacy command once and marks only apply commands writable", async () => {
   const seen = [];
   const commands = Object.fromEntries(
     ["preflight", "schema-plan", "schema-apply", "data-plan", "data-apply", "verify", "status"].map(
@@ -106,6 +118,65 @@ test("dispatches every command once and marks only apply commands writable", asy
       access: command.endsWith("-apply") ? "write" : "read",
     })),
   );
+});
+
+test("routes recovery commands with data-apply as the only remote write", async () => {
+  const seen = [];
+  const names = ["recovery-preflight", "schema-adopt", "data-plan", "data-apply", "verify", "status"];
+  const commands = Object.fromEntries(names.map((command) => [
+    command,
+    async (context) => {
+      seen.push({ command, access: context.access });
+      return { status: "PASSED" };
+    },
+  ]));
+  for (const command of names) {
+    const argv = [command, "--manifest", "recovery.json"];
+    if (command === "data-apply") argv.push("--confirm", `${MANIFEST_SHA}:DATA_APPLY`);
+    const result = await runPromotionCommand({
+      argv,
+      dependencies: { loadManifest: async () => recoveryManifest(), commands },
+    });
+    assert.equal(result.exitCode, 0);
+  }
+  assert.deepEqual(seen, names.map((command) => ({
+    command,
+    access: command === "data-apply" ? "write" : "read",
+  })));
+});
+
+test("keeps legacy and recovery command paths mutually exclusive", async () => {
+  for (const command of ["recovery-preflight", "schema-adopt"]) {
+    await assert.rejects(
+      runPromotionCommand({
+        argv: [command, "--manifest", "legacy.json"],
+        dependencies: { loadManifest: async () => manifest(), commands: { [command]: async () => ({}) } },
+      }),
+      /contract|recovery|command/iu,
+    );
+  }
+  for (const command of ["preflight", "schema-plan", "schema-apply"]) {
+    const argv = [command, "--manifest", "recovery.json"];
+    if (command === "schema-apply") argv.push("--confirm", `${MANIFEST_SHA}:SCHEMA_APPLY`);
+    await assert.rejects(
+      runPromotionCommand({
+        argv,
+        dependencies: { loadManifest: async () => recoveryManifest(), commands: { [command]: async () => ({}) } },
+      }),
+      /contract|recovery|command/iu,
+    );
+  }
+  assert.throws(() => parsePromotionArgs(["retry", "--manifest", "recovery.json"]), /unknown/iu);
+});
+
+test("namespaces every recovery runtime file by the new manifest hash", () => {
+  const value = recoveryManifest();
+  const paths = runtimePaths("C:\\repo", value);
+  for (const filePath of Object.values(paths)) {
+    assert.match(filePath, new RegExp(MANIFEST_SHA, "u"));
+    assert.doesNotMatch(filePath, new RegExp(value.recovery.predecessorManifestSha256, "u"));
+  }
+  assert.match(paths.failureEvidence, /failure\.json$/u);
 });
 
 test("status without a journal is BLOCKED with exit code 2", async () => {

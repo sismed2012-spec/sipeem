@@ -126,6 +126,12 @@ function journalIdentity(manifest) {
     sourceCommit: manifest.sourceCommit,
     sourceRef: manifest.source?.projectRef,
     targetRef: manifest.target?.projectRef,
+    ...(manifest.contractVersion === 2
+      ? {
+          mode: manifest.mode,
+          predecessorManifestSha256: manifest.recovery?.predecessorManifestSha256,
+        }
+      : {}),
   };
 }
 

@@ -207,6 +207,12 @@ export async function saveJournalAtomically(filePath, journal) {
     sourceCommit: journal.sourceCommit,
     sourceRef: journal.sourceRef,
     targetRef: journal.targetRef,
+    ...(journal.contractVersion === 2
+      ? {
+          mode: journal.mode,
+          predecessorManifestSha256: journal.predecessorManifestSha256,
+        }
+      : {}),
   });
   await mkdir(path.dirname(filePath), { recursive: true });
   const temporaryPath = `${filePath}.tmp`;
