@@ -70,6 +70,58 @@ export function buildVersionedSectionsUrl(input: {
   return `/api/cartografia/secciones?${params.toString()}`;
 }
 
+export interface SectionGeometryCandidate {
+  source: "VERSIONED" | "ARCGIS_FALLBACK";
+  versionId: number | null;
+  url: string;
+}
+
+export function buildSectionGeometryCandidates(input: {
+  versionId: number | null;
+  municipio: string;
+  allowUnversionedFallback: boolean;
+}): SectionGeometryCandidate[] {
+  const municipio = normalizeMunicipioClave(input.municipio);
+  if (!municipio) return [];
+
+  const candidates: SectionGeometryCandidate[] = [];
+  if (input.versionId != null) {
+    candidates.push({
+      source: "VERSIONED",
+      versionId: input.versionId,
+      url: buildVersionedSectionsUrl({
+        versionId: input.versionId,
+        municipio,
+      }),
+    });
+  }
+
+  if (input.allowUnversionedFallback) {
+    const params = new URLSearchParams({
+      returnGeometry: "true",
+      where: `CVE_MUN=${Number(municipio)}`,
+    });
+    candidates.push({
+      source: "ARCGIS_FALLBACK",
+      versionId: null,
+      url: `/api/arcgis/seccion?${params.toString()}`,
+    });
+  }
+
+  return candidates;
+}
+
+export function isStaticTerritorialGeometryCompatible(
+  versions: CartografiaVersion[],
+  selectedVersionId: number | null,
+): boolean {
+  if (selectedVersionId == null) return false;
+  const selected = versions.find((version) => version.id === selectedVersionId);
+  return Boolean(
+    selected?.isDefault && selected.state.toUpperCase() === "PUBLICADA",
+  );
+}
+
 export function clearSectionOverlay<T extends Record<string, unknown>>(
   overlays: T
 ): Omit<T, "seccion"> {
@@ -84,5 +136,18 @@ export function isSectionSelectionCurrent(
 ): boolean {
   return (
     selectionVersionId != null && selectionVersionId === currentVersionId
+  );
+}
+
+export function isSectionSelectionVisible(
+  selectionVersionId: number | null,
+  currentVersionId: number | null,
+  selectionGeometry: object | null,
+  currentGeometry: object | null,
+): boolean {
+  return (
+    selectionVersionId === currentVersionId &&
+    selectionGeometry !== null &&
+    selectionGeometry === currentGeometry
   );
 }

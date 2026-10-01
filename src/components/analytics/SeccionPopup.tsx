@@ -34,7 +34,7 @@ export interface ArcGISSeccionProps {
 
 interface Props {
   seccion: ArcGISSeccionProps;
-  cartografiaVersionId: number;
+  cartografiaVersionId: number | null;
   onClose: () => void;
 }
 
@@ -249,7 +249,7 @@ export function SeccionPopup({ seccion, cartografiaVersionId, onClose }: Props) 
   useEffect(() => {
     const sectionId = seccion.seccionId;
     const coordinator = demografiaCoordinatorRef.current;
-    if (!coordinator || sectionId === null) {
+    if (!coordinator || sectionId === null || cartografiaVersionId === null) {
       coordinator?.clear();
       setDemografia(null);
       setDemografiaError(false);
@@ -266,7 +266,7 @@ export function SeccionPopup({ seccion, cartografiaVersionId, onClose }: Props) 
   useEffect(() => {
     const sectionId = seccion.seccionId;
     const coordinator = listaNominalCoordinatorRef.current;
-    if (!coordinator || sectionId === null) {
+    if (!coordinator || sectionId === null || cartografiaVersionId === null) {
       coordinator?.clear();
       setListaNominal(null);
       setListaNominalError(false);
@@ -364,6 +364,12 @@ export function SeccionPopup({ seccion, cartografiaVersionId, onClose }: Props) 
             <StatCell label="Control" value={seccion.control ?? "-"} />
           </div>
         </div>
+
+        {cartografiaVersionId === null && (
+          <p className="rounded border border-amber-200 bg-amber-50 px-2.5 py-2 text-[10px] text-amber-800">
+            Datos demográficos y nominales no disponibles sin versión cartográfica
+          </p>
+        )}
 
         <div>
           {listaNominalLoading && (

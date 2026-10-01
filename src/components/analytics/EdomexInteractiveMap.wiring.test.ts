@@ -26,6 +26,10 @@ describe("EdomexInteractiveMap territorial theme wiring", () => {
     assert.match(source, /overlayKey === "seccion" \? 2/);
     assert.match(source, /orderedOverlayEntries\.map/);
     assert.match(source, /if \(isDraggingRef\.current\) return/);
+    assert.match(source, /isSectionSelectionVisible\(/);
+    assert.match(source, /geometry: fc/);
+    assert.match(source, /selectedSeccion\.geometry/);
+    assert.match(source, /overlayData\.seccion \?\? null/);
     assert.match(source, /event\.stopPropagation\(\)/);
     assert.match(source, /setSelectedTerritory\(\{/);
     assert.match(source, /row: territoryRow/);

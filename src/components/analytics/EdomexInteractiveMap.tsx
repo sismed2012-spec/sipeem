@@ -15,7 +15,7 @@ import { MapTooltip } from "./MapTooltip";
 import { MunicipioPopup, type ArcGISMunicipioProps } from "./MunicipioPopup";
 import { SeccionPopup, type ArcGISSeccionProps } from "./SeccionPopup";
 import { resolvePopupContext } from "./map-popup-resolvers";
-import { isSectionSelectionCurrent } from "@/lib/cartografia-map";
+import { isSectionSelectionVisible } from "@/lib/cartografia-map";
 import { resolveDemografiaSectionId } from "@/lib/demografia-map";
 import {
   formatTerritorialMetric,
@@ -170,6 +170,7 @@ export function EdomexInteractiveMap({
     useState<{
       data: ArcGISSeccionProps;
       versionId: number | null;
+      geometry: MapFeatureCollection;
     } | null>(null);
   const [selectedTerritory, setSelectedTerritory] = useState<{
     row: TerritorialIndicatorRow;
@@ -542,6 +543,7 @@ export function EdomexInteractiveMap({
                                 popupContext.municipioNombre
                               ),
                               versionId: cartografiaVersionId,
+                              geometry: fc,
                             });
                           }}
                         />
@@ -764,13 +766,15 @@ export function EdomexInteractiveMap({
       ) : null}
 
       {selectedSeccion &&
-        isSectionSelectionCurrent(
+        isSectionSelectionVisible(
           selectedSeccion.versionId,
-          cartografiaVersionId
+          cartografiaVersionId,
+          selectedSeccion.geometry,
+          overlayData.seccion ?? null,
         ) && (
         <SeccionPopup
           seccion={selectedSeccion.data}
-          cartografiaVersionId={selectedSeccion.versionId!}
+          cartografiaVersionId={selectedSeccion.versionId}
           onClose={() => setSelectedSeccion(null)}
         />
       )}

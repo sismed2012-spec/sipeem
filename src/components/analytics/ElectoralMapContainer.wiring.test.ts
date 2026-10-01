@@ -10,11 +10,14 @@ describe("ElectoralMapContainer cartography wiring", () => {
     );
 
     assert.match(source, /fetch\("\/api\/cartografia\/versiones"/);
-    assert.match(source, /buildVersionedSectionsUrl\(/);
+    assert.match(source, /buildSectionGeometryCandidates\(/);
+    assert.match(source, /setSectionGeometryVersionId\(candidate\.versionId\)/);
+    assert.match(source, /setSectionFallbackActive\(candidate\.source === "ARCGIS_FALLBACK"\)/);
     assert.match(
       source,
-      /cartografiaVersionId=\{selectedCartografiaVersionId\}/
+      /cartografiaVersionId=\{sectionGeometryVersionId\}/
     );
+    assert.match(source, /sectionFallback=\{sectionFallbackActive\}/);
   });
 
   it("coordinates a reversible territorial theme without replacing political data", async () => {
@@ -35,6 +38,9 @@ describe("ElectoralMapContainer cartography wiring", () => {
     assert.match(source, /ensureOverlay\("distrito_local"\)/);
     assert.match(source, /territorialLevel === "DISTRITO_FEDERAL"/);
     assert.match(source, /ensureOverlay\("distrito_federal"\)/);
+    assert.match(source, /isStaticTerritorialGeometryCompatible\(/);
+    assert.match(source, /!territorialGeometryCompatible/);
+    assert.match(source, /solo están disponibles para la cartografía vigente/);
     assert.match(source, /setThematicError\(/);
     assert.match(source, /const thematicPresentation = useMemo/);
     assert.match(source, /thematicError \|\| !territorialResponse/);

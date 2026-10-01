@@ -37,8 +37,9 @@ import {
 import { getCoberturaByMunicipio } from "@/actions/estructura";
 import { createClient } from "@/lib/supabase/client";
 import {
-  buildVersionedSectionsUrl,
+  buildSectionGeometryCandidates,
   clearSectionOverlay,
+  isStaticTerritorialGeometryCompatible,
   normalizeMunicipioClave,
   selectInitialCartografiaVersion,
 } from "@/lib/cartografia-map";
@@ -107,6 +108,9 @@ export function ElectoralMapContainer({
   const [cartografiaLoading, setCartografiaLoading] = useState(true);
   const [cartografiaError, setCartografiaError] = useState<string | null>(null);
   const [sectionError, setSectionError] = useState<string | null>(null);
+  const [sectionGeometryVersionId, setSectionGeometryVersionId] =
+    useState<number | null>(null);
+  const [sectionFallbackActive, setSectionFallbackActive] = useState(false);
   const [cartografiaRefreshKey, setCartografiaRefreshKey] = useState(0);
   const [sectionRefreshKey, setSectionRefreshKey] = useState(0);
   const [coberturaMap, setCoberturaMap] = useState<Record<number, { compromisos: number; meta: number }>>({});
@@ -131,10 +135,17 @@ export function ElectoralMapContainer({
   const territorialCoordinatorRef = useRef<
     ReturnType<typeof createTerritorialIndicatorsRequestCoordinator> | null
   >(null);
-  const requiredThematicOverlay = getRequiredTerritorialOverlay(
+  const territorialGeometryCompatible = isStaticTerritorialGeometryCompatible(
+    cartografiaVersions,
+    selectedCartografiaVersionId,
+  );
+  const requestedThematicOverlay = getRequiredTerritorialOverlay(
     territorialMode,
     territorialLevel,
   );
+  const requiredThematicOverlay = territorialGeometryCompatible
+    ? requestedThematicOverlay
+    : null;
   const effectiveActiveOverlays = useMemo(
     () => buildEffectiveTerritorialOverlays(activeOverlays, requiredThematicOverlay),
     [activeOverlays, requiredThematicOverlay],
@@ -232,37 +243,61 @@ export function ElectoralMapContainer({
   const seccionOverlayActive = activeOverlays.has("seccion");
 
   useEffect(() => {
-    if (!seccionOverlayActive) return;
+    if (!seccionOverlayActive) {
+      setSectionGeometryVersionId(null);
+      setSectionFallbackActive(false);
+      return;
+    }
 
     setOverlayData((current) => clearSectionOverlay(current));
     setSectionError(null);
+    setSectionGeometryVersionId(null);
+    setSectionFallbackActive(false);
 
     const municipio = normalizeMunicipioClave(selectedMunicipio?.geoId);
-    if (!municipio || selectedCartografiaVersionId == null) return;
+    if (!municipio) return;
 
     const controller = new AbortController();
-    const url = buildVersionedSectionsUrl({
+    const candidates = buildSectionGeometryCandidates({
       versionId: selectedCartografiaVersionId,
       municipio,
+      allowUnversionedFallback:
+        selectedCartografiaVersionId != null || cartografiaError != null,
     });
 
-    fetch(url, { signal: controller.signal })
-      .then(async (response) => {
-        if (!response.ok) throw new Error("secciones no disponibles");
-        return (await response.json()) as MapFeatureCollection;
-      })
-      .then((data) =>
-        setOverlayData((current) => ({ ...current, seccion: data }))
-      )
-      .catch((fetchError: unknown) => {
-        if (fetchError instanceof DOMException && fetchError.name === "AbortError") {
+    void (async () => {
+      for (const candidate of candidates) {
+        try {
+          const response = await fetch(candidate.url, {
+            signal: controller.signal,
+          });
+          if (!response.ok) throw new Error("secciones no disponibles");
+          const data = (await response.json()) as MapFeatureCollection;
+          if (controller.signal.aborted) return;
+          setOverlayData((current) => ({ ...current, seccion: data }));
+          setSectionGeometryVersionId(candidate.versionId);
+          setSectionFallbackActive(candidate.source === "ARCGIS_FALLBACK");
+          setSectionError(
+            candidate.source === "ARCGIS_FALLBACK"
+              ? "Mostrando secciones ArcGIS sin versión; los datos versionados están deshabilitados"
+              : null,
+          );
           return;
+        } catch (fetchError) {
+          if (
+            fetchError instanceof DOMException &&
+            fetchError.name === "AbortError"
+          ) {
+            return;
+          }
         }
-        setSectionError("No se pudieron cargar las secciones de esta versión");
-      });
+      }
+      setSectionError("No se pudieron cargar las secciones");
+    })();
 
     return () => controller.abort();
   }, [
+    cartografiaError,
     selectedMunicipio?.geoId,
     selectedCartografiaVersionId,
     seccionOverlayActive,
@@ -418,6 +453,8 @@ export function ElectoralMapContainer({
     setSelectedCartografiaVersionId(versionId);
     setOverlayData((current) => clearSectionOverlay(current));
     setSectionError(null);
+    setSectionGeometryVersionId(null);
+    setSectionFallbackActive(false);
   }, []);
 
   const handleCartografiaRetry = useCallback(() => {
@@ -464,6 +501,16 @@ export function ElectoralMapContainer({
       return;
     }
 
+    if (!territorialGeometryCompatible) {
+      territorialCoordinatorRef.current?.clear();
+      setTerritorialResponse(null);
+      setTerritorialLoading(false);
+      setThematicError(
+        "Los indicadores temáticos solo están disponibles para la cartografía vigente",
+      );
+      return;
+    }
+
     let current = true;
     setTerritorialResponse(null);
     setTerritorialLoading(true);
@@ -500,6 +547,7 @@ export function ElectoralMapContainer({
   }, [
     ensureOverlay,
     selectedCartografiaVersionId,
+    territorialGeometryCompatible,
     territorialLevel,
     territorialMode,
     territorialRetryKey,
@@ -760,7 +808,7 @@ export function ElectoralMapContainer({
           onMunicipioSelect={setSelectedMunicipio}
           onVerSecciones={handleVerSecciones}
           coberturaMap={coberturaMap}
-          cartografiaVersionId={selectedCartografiaVersionId}
+          cartografiaVersionId={sectionGeometryVersionId}
           territorialTheme={thematicPresentation}
         />
 
@@ -794,7 +842,10 @@ export function ElectoralMapContainer({
             requiredOverlay={requiredThematicOverlay}
             onToggle={toggleOverlay}
             hasMunicipioSelected={selectedMunicipio?.geoId != null}
-            sectionAvailable={selectedCartografiaVersionId != null}
+            sectionAvailable={
+              selectedCartografiaVersionId != null || cartografiaError != null
+            }
+            sectionFallback={sectionFallbackActive}
             coberturaMap={coberturaMap}
             indicatorControls={indicatorControls}
           />
@@ -851,7 +902,10 @@ export function ElectoralMapContainer({
               requiredOverlay={requiredThematicOverlay}
               onToggle={toggleOverlay}
               hasMunicipioSelected={selectedMunicipio?.geoId != null}
-              sectionAvailable={selectedCartografiaVersionId != null}
+              sectionAvailable={
+                selectedCartografiaVersionId != null || cartografiaError != null
+              }
+              sectionFallback={sectionFallbackActive}
               coberturaMap={coberturaMap}
               indicatorControls={indicatorControls}
               className="min-w-0 shadow-none ring-0"

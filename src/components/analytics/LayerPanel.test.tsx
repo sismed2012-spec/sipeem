@@ -35,6 +35,20 @@ describe("LayerPanel", () => {
     assert.match(html, /0–33% Crítico/);
   });
 
+  it("labels the ArcGIS section fallback and warns that versioned data is disabled", () => {
+    const html = renderToStaticMarkup(
+      <LayerPanel
+        activeOverlays={new Set(["seccion"])}
+        onToggle={() => undefined}
+        hasMunicipioSelected
+        sectionFallback
+      />
+    );
+
+    assert.match(html, /Sección \(sin versión\)/);
+    assert.match(html, /Demografía y lista nominal deshabilitadas/);
+  });
+
   it("locks a district overlay required by the active territorial theme", () => {
     const html = renderToStaticMarkup(
       <LayerPanel

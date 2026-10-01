@@ -30,6 +30,7 @@ interface Props {
   onToggle: (key: OverlayKey) => void;
   hasMunicipioSelected: boolean;
   sectionAvailable?: boolean;
+  sectionFallback?: boolean;
   coberturaMap?: Record<number, { compromisos: number; meta: number }>;
   indicatorControls?: ReactNode;
   className?: string;
@@ -41,6 +42,7 @@ export function LayerPanel({
   onToggle,
   hasMunicipioSelected,
   sectionAvailable = true,
+  sectionFallback = false,
   coberturaMap = {},
   indicatorControls,
   className,
@@ -81,6 +83,10 @@ export function LayerPanel({
             ? "Cartografía versionada no disponible"
             : "Selecciona un municipio primero";
 
+        const label = layer.key === "seccion" && sectionFallback
+          ? "Sección (sin versión)"
+          : layer.label;
+
         return (
           <button
             key={layer.key}
@@ -105,7 +111,7 @@ export function LayerPanel({
                 active ? "text-slate-100 font-semibold" : "text-slate-400"
               )}
             >
-              {layer.label}
+              {label}
             </span>
             {layer.lazy && (
               <span className="text-slate-600 text-[9px] ml-auto">lazy</span>
@@ -116,6 +122,11 @@ export function LayerPanel({
 
       {activeOverlays.has("seccion") && (
         <div className="border-t border-slate-700 pt-2 mt-2">
+          {sectionFallback && (
+            <p className="mb-2 rounded bg-amber-950/60 px-2 py-1 text-[9px] leading-relaxed text-amber-200">
+              Demografía y lista nominal deshabilitadas: geometría ArcGIS sin versión.
+            </p>
+          )}
           <p className="text-[9px] text-slate-500 uppercase tracking-widest mb-1.5">
             Cobertura {hasCoberturaData ? "" : "(sin datos)"}
           </p>
