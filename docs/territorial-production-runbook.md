@@ -122,6 +122,15 @@ Eliminar el override de una rama hace que vuelva a heredar el valor general de
 Preview. Si no existia un valor general, la aplicacion volvera a fallar de forma
 cerrada en las rutas territoriales sin afectar Auth.
 
+Cuando el Preview se creo con el fallback de overrides por despliegue no existe
+un override de rama que restaurar: el despliegue es inmutable. Se deja de usar
+esa URL y se crea un Preview sustituto desde el mismo commit, inyectando por el
+entorno hijo los valores que se desean comprobar. Antes de retirar la URL
+anterior se verifica que el sustituto esta `READY`, que sus rutas territoriales
+responden y que las variables globales y el despliegue de Production conservan
+su huella previa. No se promueve ni se reutiliza como Production el despliegue
+fallido.
+
 ## Rotacion de credenciales
 
 1. Crear una nueva clave secreta de servidor en Supabase.
@@ -130,6 +139,11 @@ cerrada en las rutas territoriales sin afectar Auth.
 4. Eliminar la clave anterior solamente despues de verificar el nuevo
    despliegue.
 5. Registrar fecha, responsable y hash SHA-256 de la clave; nunca su valor.
+
+Para un Preview con overrides por despliegue, la rotacion siempre crea un
+despliegue nuevo con la clave nueva en el entorno hijo. Se repite la aceptacion
+completa y solo entonces se revoca la clave anterior y se retira de uso la URL
+del Preview anterior; no se intenta editar sus variables inmutables.
 
 La rotacion de Production es una operacion separada y requiere su propio corte
 controlado.
