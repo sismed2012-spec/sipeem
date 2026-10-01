@@ -1,0 +1,547 @@
+{
+  "contractVersion": 1,
+  "hashAlgorithm": "sha256",
+  "promotionId": "sipeem-territorial-prod-2026-10-01",
+  "createdAt": "2026-10-01T17:17:44.425Z",
+  "sourceCommit": "852545d135846db68edb00b5d0af032ad6328aa7",
+  "source": {
+    "projectRef": "nppvprbfmjbhwheghipa",
+    "postgresVersion": "17.6"
+  },
+  "target": {
+    "projectRef": "cdvukcthosppezjscwod",
+    "postgresVersion": "17.6"
+  },
+  "migrations": [
+    {
+      "path": "infra/territorial/supabase/migrations/20260912034453_extensions.sql",
+      "sha256": "2b18819656b626adedde2b466cc14853c49905b67709e31241b7c1465e939fea"
+    },
+    {
+      "path": "infra/territorial/supabase/migrations/20260912034515_catalogos.sql",
+      "sha256": "a3502590eea9273104e2f405a3f11c9a1beb9a21991f5a2ff34d8a6d9b211aeb"
+    },
+    {
+      "path": "infra/territorial/supabase/migrations/20260912034535_territorios.sql",
+      "sha256": "661e41ff7a8532de675ae916caed74383023042f39c2d496eeccd9355af9894a"
+    },
+    {
+      "path": "infra/territorial/supabase/migrations/20260912034558_datos_electorales.sql",
+      "sha256": "89c2ac8a2b9fe1302821b5b3b5a3902a8afc67a9e128b1356d26ec9aed493c5b"
+    },
+    {
+      "path": "infra/territorial/supabase/migrations/20260912034619_eventos_territoriales.sql",
+      "sha256": "c100cf9b2b05d5611d83840e62984d256a5f48fcffe04dea2294dce0f285fac1"
+    },
+    {
+      "path": "infra/territorial/supabase/migrations/20260912034649_funciones_postgis_rpc.sql",
+      "sha256": "f22ce8db5f3e643e721b8fd1a551b8696608d0f1d8139362dab424e3f3c41f8f"
+    },
+    {
+      "path": "infra/territorial/supabase/migrations/20260912045859_fuerzas_electorales.sql",
+      "sha256": "c45896e3465d4f7596892629e84aa4f4f028e599121c4930257546795ec3c43d"
+    },
+    {
+      "path": "infra/territorial/supabase/migrations/20260912150715_staging_electoral.sql",
+      "sha256": "5f678ece9f38aa7c291063480405769f44a7fa6371f235c55aff5204facaeae5"
+    },
+    {
+      "path": "infra/territorial/supabase/migrations/20260912152714_validacion_promocion_electoral.sql",
+      "sha256": "246260d54f4f83bd4c762e1a9fe4224843e5717353997381a2b2aa98b0661332"
+    },
+    {
+      "path": "infra/territorial/supabase/migrations/20260912163111_validacion_electoral_lotes.sql",
+      "sha256": "c53e44a3e91c1ea0fcdbb237ff3145a42a3a2d828091729421597e7624214546"
+    },
+    {
+      "path": "infra/territorial/supabase/migrations/20260912171901_reconciliar_estado_validacion_electoral.sql",
+      "sha256": "fca5eb3ca7de62cac93fa0e5eaa56ef2fbf93a6220948115b37fb306695b16f7"
+    },
+    {
+      "path": "infra/territorial/supabase/migrations/20260913170926_cartografia_versiones_control.sql",
+      "sha256": "083a3b83451bfc3f08e1fc6ceb6a187d597336b5912b0ca84de93e05915990c9"
+    },
+    {
+      "path": "infra/territorial/supabase/migrations/20260913174107_cartografia_versiones_control_auditoria.sql",
+      "sha256": "21744ba2ac3908a0a572e788c10872c52eb86a5fdb04eb021c465ac53a005bbc"
+    },
+    {
+      "path": "infra/territorial/supabase/migrations/20260914033700_cartografia_versiones_contrato.sql",
+      "sha256": "633a47a12d5c8553bd1449b54aaf46fa1d315f97f048d27283ee6f29c0e2a472"
+    },
+    {
+      "path": "infra/territorial/supabase/migrations/20260914121702_cartografia_geometrias_versionadas.sql",
+      "sha256": "1f24667fcbba0343e45dc095968fd5a19c7f42ac243b9e9d61e34902047abf08"
+    },
+    {
+      "path": "infra/territorial/supabase/migrations/20260914190257_cartografia_equivalencias_concurrencia.sql",
+      "sha256": "7a681931c23834dfed09f26bb4fa01ce1b103e86cd46aef9b6bd6694fd46584a"
+    },
+    {
+      "path": "infra/territorial/supabase/migrations/20260914210108_cartografia_electoral_versionada.sql",
+      "sha256": "caf79c1e61cd2944c4f3e2a94b40765524e03875cb150ac357a137cf6281f6fb"
+    },
+    {
+      "path": "infra/territorial/supabase/migrations/20260914232033_cartografia_eventos_versionados.sql",
+      "sha256": "98f18d714549bab49e717abe23ee6555714ff128dd7ef50487ced974403c5f56"
+    },
+    {
+      "path": "infra/territorial/supabase/migrations/20260914235900_cartografia_eventos_rpc_lint.sql",
+      "sha256": "fb81450b1a704a98ffd2d2fd43f1563fdcce4d869682228adfda3c515a5c09fc"
+    },
+    {
+      "path": "infra/territorial/supabase/migrations/20260915020028_cartografia_carga_validacion_rpc.sql",
+      "sha256": "ab4d2222d501740165e796c0ebe9afd832ff0c0f16ce236c8e110b65d67b86d3"
+    },
+    {
+      "path": "infra/territorial/supabase/migrations/20260915113448_cartografia_codificaciones_recibo.sql",
+      "sha256": "a455d289dd47f2703b05c59e8af3405d7d7391188a51b5db21074aa5abe08050"
+    },
+    {
+      "path": "infra/territorial/supabase/migrations/20260915120827_cartografia_recibo_insert_guard.sql",
+      "sha256": "fef82120e046be6b65a1dd26462d9dbb89f803245d60d9a3f644840e36aed517"
+    },
+    {
+      "path": "infra/territorial/supabase/migrations/20260915165304_cartografia_colonias_sin_geometria.sql",
+      "sha256": "c416ab1569a363438ed9618cbb63b104d41ca5088c794cb21745c044472fbf27"
+    },
+    {
+      "path": "infra/territorial/supabase/migrations/20260915185141_cartografia_cobertura_colonias_rpc.sql",
+      "sha256": "c318fc616e89b5b7ce2efb5be88b284549038cd82f9f0b44bbd0885b93bc8172"
+    },
+    {
+      "path": "infra/territorial/supabase/migrations/20260915195122_cartografia_colonias_lote_mixto.sql",
+      "sha256": "cd3f12797a5dd15c4704795b72de5bf34fd25c34236b79c10793184345a5ed11"
+    },
+    {
+      "path": "infra/territorial/supabase/migrations/20260915210428_cartografia_colonias_validacion.sql",
+      "sha256": "e8a80eace6bc3da07b9ed2ac473de9e1885398653062e436789523c3c9090745"
+    },
+    {
+      "path": "infra/territorial/supabase/migrations/20260915220819_cartografia_colonias_lectura.sql",
+      "sha256": "081233241f621e79a9f74286d3d394c004f7b6463ba929e1382a0435acaea55b"
+    },
+    {
+      "path": "infra/territorial/supabase/migrations/20260915223238_cartografia_colonias_advertencias_lectura.sql",
+      "sha256": "3a7fd3f30c49f0ea21cdae2a11bee0d237033405a3829caa91e45ac6a0a1dc89"
+    },
+    {
+      "path": "infra/territorial/supabase/migrations/20260916014542_cartografia_import_sin_replay.sql",
+      "sha256": "75db194b03a0292257b2c217bde00977515029aed74faec0bfa5a9f685d02e1b"
+    },
+    {
+      "path": "infra/territorial/supabase/migrations/20260919193822_cartografia_limites_localidad_modelo.sql",
+      "sha256": "d1a99ba70de9ec155ab5408d013447801b7f76fdf88c7f84a4e36fefe078bbf6"
+    },
+    {
+      "path": "infra/territorial/supabase/migrations/20260919203503_cartografia_limites_localidad_recibo.sql",
+      "sha256": "f14c73fd2e1533ec65dda86e931ba42173b8ec58138201398a07ce536240c51c"
+    },
+    {
+      "path": "infra/territorial/supabase/migrations/20260920051014_cartografia_limites_localidad_import.sql",
+      "sha256": "2bec6d60143027f1a2080f0b877e44b9328f6058777b535b8653db7d19aa3f51"
+    },
+    {
+      "path": "infra/territorial/supabase/migrations/20260923012904_cartografia_limites_localidad_validacion.sql",
+      "sha256": "6804aa846d9b07f7fcc376ca431f122e27cc6d5a2ce5361ce76f2bf6ed62d45b"
+    },
+    {
+      "path": "infra/territorial/supabase/migrations/20260923023000_cartografia_limites_localidad_validacion_exacta.sql",
+      "sha256": "ac17fda92c4ee119553dfdf6d31b318865d1775f38f87f2127edca4c9ed67260"
+    },
+    {
+      "path": "infra/territorial/supabase/migrations/20260923213000_cartografia_validacion_paso_exacto.sql",
+      "sha256": "7779a2c5283ec0aa6eb9ed00f8e71fbf113ab867cdb7171236004ca129f786ff"
+    },
+    {
+      "path": "infra/territorial/supabase/migrations/20260925130000_cartografia_consulta_publicacion_rpc.sql",
+      "sha256": "0daa51c75644c040aa60a3ae390de822b45c73c9b301faf3c3c065ef8a88aaf1"
+    },
+    {
+      "path": "infra/territorial/supabase/migrations/20260927012156_create_demografia_source_model.sql",
+      "sha256": "3fa976ae11acec3c9977d3d430e47e69f9a0422ebbd7a72d7bd193565a8a0ac7"
+    },
+    {
+      "path": "infra/territorial/supabase/migrations/20260927012824_create_demografia_crosswalk_model.sql",
+      "sha256": "ebc0922bb75773d37a81714b99889e76b149f0561bbd913459a4aefc2300fde2"
+    },
+    {
+      "path": "infra/territorial/supabase/migrations/20260927012826_create_demografia_read_api.sql",
+      "sha256": "2b414d456ffa5005ab527a30d59faf71d7409b9ca70d78903bbb5065bfcc9f7b"
+    },
+    {
+      "path": "infra/territorial/supabase/migrations/20260927044412_create_demografia_review_api.sql",
+      "sha256": "49de0e99a80e9e25975b2a641d78a26f996f6eadc7a1c41383127f3d37b88910"
+    },
+    {
+      "path": "infra/territorial/supabase/migrations/20260927061605_create_demografia_eceg_model.sql",
+      "sha256": "44830ddb89249e682ec92244032deb3e5bfb76563771ca87bf334f2ad3b495b6"
+    },
+    {
+      "path": "infra/territorial/supabase/migrations/20260927063836_extend_demografia_eceg_read_api.sql",
+      "sha256": "707b767d2536c35d1f3f72180c40e7ed0d3ec52c633a5fc63ec66f483d995666"
+    },
+    {
+      "path": "infra/territorial/supabase/migrations/20260927073000_harden_demografia_eceg_publication.sql",
+      "sha256": "dc4f3842f9d3c62c68aee0728aa57c6116837f562d06755b9e42cd3198139a89"
+    },
+    {
+      "path": "infra/territorial/supabase/migrations/20260927075500_close_demografia_eceg_concurrency_gaps.sql",
+      "sha256": "9e20ee87dae25e9d894d9131b737e0a4344b95a7a3e1ce3486976fd9fd3b4a3b"
+    },
+    {
+      "path": "infra/territorial/supabase/migrations/20260928154739_lista_nominal_versionada.sql",
+      "sha256": "5dc3c72948c786352622be023738d9cf9ec631df21f405b32240d672af848e9b"
+    },
+    {
+      "path": "infra/territorial/supabase/migrations/20260928160450_lista_nominal_read_api.sql",
+      "sha256": "ea8e0fabb064a86805b12c1d5349c1afa31c2153d3f5fb0c93437063e5766839"
+    },
+    {
+      "path": "infra/territorial/supabase/migrations/20260928220532_indicadores_territoriales_read_api.sql",
+      "sha256": "f02d698a714a3e9dddf4536e9fb651fa932ece0e2960df6793e1f319c3ffce50"
+    },
+    {
+      "path": "infra/territorial/supabase/migrations/20260928224728_optimize_territorial_indicators_rpc.sql",
+      "sha256": "ae91fb695bdc2af0c7e8bbe1205394866cf78a2f4e5494db8b1d8a3248273743"
+    },
+    {
+      "path": "infra/territorial/supabase/migrations/20260929183359_reject_null_territorial_level.sql",
+      "sha256": "f84cb412b7e62aeef72df95b48e297d8c6665667b7ba87624f738a3f5beb557b"
+    }
+  ],
+  "dataPolicy": {
+    "contractVersion": 1,
+    "sourceProjectRef": "nppvprbfmjbhwheghipa",
+    "sourceInventorySha256": "5f6199fd6d1de9036149afabf6b377e395c460b3c8c30641aac48ef7c988d9d9",
+    "sourceSnapshot": {
+      "capturedAt": "2026-10-01",
+      "tableCount": 66,
+      "foreignKeyCount": 152,
+      "sequenceCount": 56,
+      "dependencyCount": 56
+    },
+    "include": [
+      {
+        "table": "public.cargas_cartograficas",
+        "reason": "Canonical territorial load control."
+      },
+      {
+        "table": "public.cargas_cartograficas_lotes",
+        "reason": "Canonical territorial load ledger."
+      },
+      {
+        "table": "public.cargas_electorales",
+        "reason": "Canonical electoral load control."
+      },
+      {
+        "table": "public.cartografia_archivos",
+        "reason": "Canonical cartography source-file evidence."
+      },
+      {
+        "table": "public.cartografia_cobertura_colonias_recibos",
+        "reason": "Canonical colony coverage receipts."
+      },
+      {
+        "table": "public.cartografia_cobertura_limites_localidad_recibos",
+        "reason": "Canonical locality-boundary coverage receipts."
+      },
+      {
+        "table": "public.cartografia_codificaciones_recibos",
+        "reason": "Canonical cartography encoding receipts."
+      },
+      {
+        "table": "public.cartografia_colonias",
+        "reason": "Canonical versioned colony geometry."
+      },
+      {
+        "table": "public.cartografia_colonias_sin_geometria",
+        "reason": "Canonical reviewed colony exceptions."
+      },
+      {
+        "table": "public.cartografia_distritos_federales",
+        "reason": "Canonical versioned federal districts."
+      },
+      {
+        "table": "public.cartografia_distritos_locales",
+        "reason": "Canonical versioned local districts."
+      },
+      {
+        "table": "public.cartografia_entidades",
+        "reason": "Canonical versioned state cartography."
+      },
+      {
+        "table": "public.cartografia_incidencias",
+        "reason": "Canonical cartography validation evidence."
+      },
+      {
+        "table": "public.cartografia_limites_localidad",
+        "reason": "Canonical locality boundary geometry."
+      },
+      {
+        "table": "public.cartografia_limites_localidad_puntos",
+        "reason": "Canonical locality-boundary point correspondence."
+      },
+      {
+        "table": "public.cartografia_localidades",
+        "reason": "Canonical versioned locality geometry."
+      },
+      {
+        "table": "public.cartografia_municipios",
+        "reason": "Canonical versioned municipality geometry."
+      },
+      {
+        "table": "public.cartografia_secciones",
+        "reason": "Canonical versioned electoral-section geometry."
+      },
+      {
+        "table": "public.cartografia_secciones_equivalencias",
+        "reason": "Canonical section equivalence history."
+      },
+      {
+        "table": "public.cartografia_versiones",
+        "reason": "Canonical cartography version registry."
+      },
+      {
+        "table": "public.cartografia_versiones_bitacora",
+        "reason": "Canonical cartography audit trail."
+      },
+      {
+        "table": "public.cat_estados_evento",
+        "reason": "Territorial event catalog."
+      },
+      {
+        "table": "public.cat_estados_georreferenciacion",
+        "reason": "Territorial georeferencing catalog."
+      },
+      {
+        "table": "public.cat_fuentes_evento",
+        "reason": "Territorial event-source catalog."
+      },
+      {
+        "table": "public.cat_niveles_sensibilidad",
+        "reason": "Territorial sensitivity catalog."
+      },
+      {
+        "table": "public.cat_tipos_asentamiento",
+        "reason": "Territorial settlement-type catalog."
+      },
+      {
+        "table": "public.cat_tipos_fuerza_electoral",
+        "reason": "Electoral-force type catalog."
+      },
+      {
+        "table": "public.demografia_cargas_lotes",
+        "reason": "Canonical demographic load ledger."
+      },
+      {
+        "table": "public.demografia_eceg_correspondencias",
+        "reason": "Canonical ECEG section correspondence."
+      },
+      {
+        "table": "public.demografia_eceg_secciones",
+        "reason": "Canonical ECEG section indicators."
+      },
+      {
+        "table": "public.demografia_fuentes",
+        "reason": "Canonical demographic source registry."
+      },
+      {
+        "table": "public.demografia_indicadores",
+        "reason": "Canonical demographic indicator dictionary."
+      },
+      {
+        "table": "public.demografia_localidad_correspondencia_secciones",
+        "reason": "Canonical locality-to-section allocation."
+      },
+      {
+        "table": "public.demografia_localidad_correspondencias",
+        "reason": "Canonical locality correspondence decisions."
+      },
+      {
+        "table": "public.demografia_localidades",
+        "reason": "Canonical locality demographic records."
+      },
+      {
+        "table": "public.demografia_secciones",
+        "reason": "Canonical demographic section aggregates."
+      },
+      {
+        "table": "public.demografia_secciones_cobertura",
+        "reason": "Canonical demographic coverage metrics."
+      },
+      {
+        "table": "public.elecciones",
+        "reason": "Canonical election registry."
+      },
+      {
+        "table": "public.evento_actores",
+        "reason": "Canonical territorial event actors."
+      },
+      {
+        "table": "public.evento_evidencias",
+        "reason": "Canonical territorial event evidence."
+      },
+      {
+        "table": "public.evento_georreferenciacion",
+        "reason": "Canonical event georeferencing history."
+      },
+      {
+        "table": "public.evento_historial",
+        "reason": "Canonical territorial event audit history."
+      },
+      {
+        "table": "public.eventos_territoriales",
+        "reason": "Canonical territorial events."
+      },
+      {
+        "table": "public.fuerzas_electorales",
+        "reason": "Canonical electoral forces."
+      },
+      {
+        "table": "public.fuerzas_electorales_aliases",
+        "reason": "Canonical electoral-force aliases."
+      },
+      {
+        "table": "public.fuerzas_electorales_integrantes",
+        "reason": "Canonical electoral-force membership."
+      },
+      {
+        "table": "public.lista_nominal_correspondencias",
+        "reason": "Canonical nominal-list correspondences."
+      },
+      {
+        "table": "public.lista_nominal_cortes",
+        "reason": "Canonical nominal-list cut registry."
+      },
+      {
+        "table": "public.lista_nominal_secciones",
+        "reason": "Canonical nominal-list section values."
+      },
+      {
+        "table": "public.listas_nominales",
+        "reason": "Canonical election-linked nominal lists."
+      },
+      {
+        "table": "public.participacion_electoral",
+        "reason": "Canonical electoral participation."
+      },
+      {
+        "table": "public.partidos_catalogo",
+        "reason": "Canonical political-party catalog."
+      },
+      {
+        "table": "public.resultados_electorales",
+        "reason": "Canonical electoral results."
+      },
+      {
+        "table": "public.resultados_municipales_oficiales",
+        "reason": "Canonical official municipality results."
+      },
+      {
+        "table": "public.resultados_municipales_oficiales_fuerzas",
+        "reason": "Canonical official municipality force results."
+      },
+      {
+        "table": "public.territorios_colonias",
+        "reason": "Canonical stable colony identities."
+      },
+      {
+        "table": "public.territorios_distritos_federales",
+        "reason": "Canonical stable federal-district identities."
+      },
+      {
+        "table": "public.territorios_distritos_locales",
+        "reason": "Canonical stable local-district identities."
+      },
+      {
+        "table": "public.territorios_localidades",
+        "reason": "Canonical stable locality identities."
+      },
+      {
+        "table": "public.territorios_municipios",
+        "reason": "Canonical stable municipality identities."
+      },
+      {
+        "table": "public.territorios_secciones",
+        "reason": "Canonical stable electoral-section identities."
+      },
+      {
+        "table": "public.validaciones_cartograficas_progreso",
+        "reason": "Canonical cartography validation checkpoint."
+      },
+      {
+        "table": "public.validaciones_electorales_progreso",
+        "reason": "Canonical electoral validation checkpoint."
+      }
+    ],
+    "exclude": [
+      {
+        "table": "public.staging_electoral_incidencias",
+        "reason": "Transient electoral validation findings; reproducible from reviewed source loads.",
+        "documentedIncomingDependencies": []
+      },
+      {
+        "table": "public.staging_electoral_registros",
+        "reason": "Transient raw electoral staging records; excluded to avoid promoting source-system payload duplication.",
+        "documentedIncomingDependencies": []
+      },
+      {
+        "table": "public.staging_electoral_resultados",
+        "reason": "Transient raw electoral result staging; canonical promoted results remain included.",
+        "documentedIncomingDependencies": [
+          {
+            "fromTable": "public.resultados_municipales_oficiales_fuerzas",
+            "constraint": "resultados_municipales_oficiales_fuer_resultado_staging_id_fkey",
+            "reason": "The nullable source-trace pointer is non-canonical provenance; restore handling must preserve the official result while not requiring transient staging rows."
+          }
+        ]
+      }
+    ],
+    "expectedSources": {
+      "demographic": [
+        {
+          "sha256": "340fe3f35db84fd7c5e51b7e7b1da7c34c3a220cccfa664a43edb137e5407614",
+          "state": "PUBLICADA"
+        },
+        {
+          "sha256": "8f409924e3f97fe4f839a8a9a2543d5d364c5ce161b87f9a322e5da4ee2bcc37",
+          "state": "PUBLICADA"
+        }
+      ],
+      "nominal": [
+        {
+          "sha256": "d016713ed9304ae696fbcf875141cf8268799d05468f1afb79bb8785227de161",
+          "state": "PUBLICADO"
+        }
+      ]
+    },
+    "expectedGeometries": {
+      "srids": [
+        4326
+      ],
+      "nullGeometries": 3639,
+      "invalidGeometries": 0
+    },
+    "expectedCorrespondences": {
+      "eceg": {
+        "SIN_EQUIVALENCIA": 143,
+        "VINCULO_HISTORICO": 6401
+      },
+      "nominal": {
+        "PENDIENTE": 190,
+        "VINCULADA": 7001
+      }
+    }
+  },
+  "expectations": {
+    "cartographyVersions": 1,
+    "sections": 7052,
+    "municipalities": 125,
+    "localDistricts": 45,
+    "federalDistricts": 40,
+    "ecegSections": 6544,
+    "nominalRows": 7191
+  },
+  "manifestSha256": "517c2466637ea10de6c7d2830f5e74d2d80ff11f96a7fd6d59824cfafd642d24"
+}
