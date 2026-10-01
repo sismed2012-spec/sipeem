@@ -1,4 +1,8 @@
 .artifacts/
+infra/territorial/artifacts/
+infra/territorial/journals/
+infra/territorial/supabase/.temp/
+.superpowers/
 .next/
 node_modules/
 supabase/.temp/

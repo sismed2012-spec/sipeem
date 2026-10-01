@@ -1,5 +1,10 @@
 # Lista nominal INE por sección Implementation Plan
 
+> **Ruta histórica:** desde 2026-10-01, toda referencia ejecutable a
+> `supabase/migrations` o `supabase/tests` en este plan se resuelve bajo
+> `infra/territorial/supabase/` y el CLI se ejecuta con
+> `--workdir infra/territorial`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Importar el corte INE 2026-07-31 de padrón y lista nominal por sección, relacionarlo de forma versionada con la cartografía 4025 y mostrarlo en SIPEEM sin alterar elecciones históricas ni Producción.

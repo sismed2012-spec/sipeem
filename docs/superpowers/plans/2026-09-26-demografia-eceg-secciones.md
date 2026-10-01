@@ -1,5 +1,10 @@
 # ECEG 2020 Demographics by Electoral Section Implementation Plan
 
+> **Ruta histórica:** desde 2026-10-01, toda referencia ejecutable a
+> `supabase/migrations` o `supabase/tests` en este plan se resuelve bajo
+> `infra/territorial/supabase/` y el CLI se ejecuta con
+> `--workdir infra/territorial`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use
 > `superpowers:subagent-driven-development` (recommended) or
 > `superpowers:executing-plans` to implement this plan task-by-task. Apply

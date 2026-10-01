@@ -1,5 +1,10 @@
 # Indicadores territoriales agregados Implementation Plan
 
+> **Ruta histórica:** desde 2026-10-01, toda referencia ejecutable a
+> `supabase/migrations` o `supabase/tests` en este plan se resuelve bajo
+> `infra/territorial/supabase/` y el CLI se ejecuta con
+> `--workdir infra/territorial`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Exponer indicadores nominales y demográficos versionados por municipio y distrito, y mostrarlos como un modo temático reversible del mapa de SIPEEM.
