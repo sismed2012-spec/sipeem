@@ -27,6 +27,20 @@ function executionOptions(overrides = {}) {
   };
 }
 
+function rpcResult(value, rpc = "rpc_importar_lote_cartografico_sin_replay") {
+  return { exitCode: 0, stderr: "", stdout: JSON.stringify({ rows: [{ [rpc]: value }] }) };
+}
+const imported = { carga_id: 1793, capa: "ENTIDAD", registro_confirmado: 1,
+  recibidos: 1, insertados: 1, repetidos: 0, rechazados: 0 };
+function successfulResult(args) {
+  if (args.at(-1).endsWith("start.sql")) return rpcResult({ carga_id: 1793, cartografia_version_id: 4025,
+    estado_version: "PREPARADA", estado_carga: "PREPARADA" }, "rpc_iniciar_carga_cartografica");
+  if (args.at(-1).endsWith("validate.sql")) return rpcResult({ cartografia_version_id: 4025,
+    completa: false, fase: "PADRES", errores: 0, procesados: 0, advertencias: 0,
+    cursor: { cartografia_seccion_id: 0 }, snapshot_sha256: "a".repeat(64) }, "rpc_validar_version_cartografica_lote");
+  return rpcResult(imported);
+}
+
 describe("safe cartography executor", () => {
   it("defaults to a no-command dry run", async () => {
     let calls = 0;
@@ -55,7 +69,7 @@ describe("safe cartography executor", () => {
       confirmedChecksums: new Set(["a".repeat(64)]),
       runCommand: async (command, args) => {
         calls.push({ command, args });
-        return { exitCode: 0, stdout: "ok", stderr: "" };
+        return successfulResult(args);
       },
       onBatchConfirmed: async (batch) => { confirmed.push(batch.id); },
     }));
@@ -71,11 +85,11 @@ describe("safe cartography executor", () => {
       () => executeCartographyPlan(plan, executionOptions({
         mode: "import",
         projectRef: "nppvprbfmjbhwheghipa",
-        runCommand: async () => {
+        runCommand: async (_command, args) => {
           calls += 1;
           return calls === 2
             ? { exitCode: 1, stdout: "", stderr: "database unavailable" }
-            : { exitCode: 0, stdout: "ok", stderr: "" };
+            : successfulResult(args);
         },
       })),
       /No automatic retry.*database unavailable/,
@@ -90,7 +104,7 @@ describe("safe cartography executor", () => {
       projectRef: "nppvprbfmjbhwheghipa",
       runCommand: async (_command, args) => {
         calls.push(args.at(-1));
-        return { exitCode: 0, stdout: "ok", stderr: "" };
+        return successfulResult(args);
       },
     }));
     assert.equal(calls.length, 1);
@@ -121,5 +135,73 @@ describe("safe cartography executor", () => {
       () => executeCartographyPlan(outside, executionOptions({ mode: "preflight" })),
       /outside the selected artifact/i,
     );
+  });
+
+  it("records a committed rejected batch then stops without calling the next batch", async () => {
+    const confirmed = new Set(["a".repeat(64)]);
+    let calls = 0;
+    const evidence = [];
+    await assert.rejects(executeCartographyPlan(plan, executionOptions({
+      mode: "import", projectRef: "nppvprbfmjbhwheghipa", confirmedChecksums: confirmed,
+      runCommand: async () => { calls++; return rpcResult({ ...imported, insertados: 0, rechazados: 1 }); },
+      onBatchConfirmed: async (_batch, result) => evidence.push(result.response),
+    })), /REVIEW_REQUIRED.*rechazados/);
+    assert.equal(calls, 1);
+    assert.equal(confirmed.has("b".repeat(64)), true);
+    assert.equal(evidence[0].rechazados, 1);
+  });
+
+  it("blocks malformed successful output without confirming or replaying it", async () => {
+    const evidence = [];
+    let confirms = 0;
+    await assert.rejects(executeCartographyPlan(plan, executionOptions({
+      mode: "import", projectRef: "nppvprbfmjbhwheghipa",
+      runCommand: async () => ({ exitCode: 0, stdout: "not-json", stderr: "" }),
+      onBatchConfirmed: async () => { confirms++; },
+      onBatchBlocked: async (_batch, result) => evidence.push(result),
+    })), /REVIEW_REQUIRED/);
+    assert.equal(confirms, 0);
+    assert.equal(evidence[0].stdout, "not-json");
+  });
+
+  it("returns the actual validation phase and counters", async () => {
+    const result = await executeCartographyPlan(plan, executionOptions({
+      mode: "validate", projectRef: "nppvprbfmjbhwheghipa",
+      runCommand: async (_command, args) => successfulResult(args),
+    }));
+    assert.equal(result.responses[0].response.fase, "PADRES");
+    assert.equal(result.responses[0].response.completa, false);
+  });
+
+  it("blocks a review-required artifact before opening a database connection", async () => {
+    let calls = 0;
+    await assert.rejects(executeCartographyPlan(plan, executionOptions({
+      mode: "import", projectRef: "nppvprbfmjbhwheghipa", reviewRequired: true,
+      runCommand: async () => { calls++; },
+    })), /REVIEW_REQUIRED/);
+    assert.equal(calls, 0);
+  });
+
+  it("keeps failed validation evidence and stops even when the server says completa", async () => {
+    let observed;
+    await assert.rejects(executeCartographyPlan(plan, executionOptions({
+      mode: "validate", projectRef: "nppvprbfmjbhwheghipa",
+      runCommand: async () => rpcResult({ cartografia_version_id: 4025,
+        completa: true, fase: "COMPLETA", errores: 2, procesados: 0, advertencias: 0,
+        cursor: {}, snapshot_sha256: "a".repeat(64) }, "rpc_validar_version_cartografica_lote"),
+      onBatchConfirmed: async (_batch, result) => { observed = result; },
+    })), /REVIEW_REQUIRED.*errores=2/);
+    assert.equal(observed.response.completa, true);
+    assert.equal(observed.review_required, true);
+  });
+
+  it("accepts the actual publication acknowledgement without importing a batch", async () => {
+    const result = await executeCartographyPlan(plan, executionOptions({
+      mode: "publish", projectRef: "nppvprbfmjbhwheghipa",
+      runCommand: async () => rpcResult({ version_anterior_id: 4025,
+        version_seleccionada_id: 5000, conteos_sincronizados: {} }, "rpc_publicar_version_cartografica"),
+    }));
+    assert.deepEqual(result.completed, ["publish"]);
+    assert.equal(result.responses[0].response.version_seleccionada_id, 5000);
   });
 });

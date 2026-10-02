@@ -11,6 +11,56 @@ import { hashFile } from "./archive.mjs";
 
 const MODES = new Set(["preflight", "import", "validate", "publish"]);
 
+export function parseCartographyResponse(stdout, mode, batch) {
+  const parsed = JSON.parse(stdout);
+  const rpc = mode === "validate" ? "rpc_validar_version_cartografica_lote"
+    : mode === "publish" ? "rpc_publicar_version_cartografica"
+    : batch.id === "start" ? "rpc_iniciar_carga_cartografica"
+    : batch.id === "receipts" ? "rpc_registrar_cobertura_limites_localidad"
+    : "rpc_importar_lote_cartografico_sin_replay";
+  if (!Array.isArray(parsed.rows) || parsed.rows.length !== 1 ||
+      Object.keys(parsed.rows[0] ?? {}).length !== 1) throw new Error("Invalid RPC row envelope");
+  const response = parsed.rows[0][rpc];
+  if (!response || typeof response !== "object" || Array.isArray(response)) {
+    throw new Error("Missing expected RPC acknowledgement");
+  }
+  const integer = (key, minimum = 0) => {
+    if (!Number.isSafeInteger(response[key]) || response[key] < minimum) {
+      throw new Error(`Invalid RPC ${key}`);
+    }
+  };
+  if (rpc === "rpc_importar_lote_cartografico_sin_replay") {
+    for (const key of ["recibidos", "insertados", "repetidos", "rechazados"]) integer(key);
+    integer("carga_id", 1);
+    integer("registro_confirmado", 1);
+    if (response.recibidos !== response.insertados + response.repetidos + response.rechazados) {
+      throw new Error("RPC counters do not reconcile");
+    }
+    const range = /^([A-Z_]+):([0-9]+)-([0-9]+)$/.exec(batch.id);
+    if (range && (response.capa !== range[1] || response.registro_confirmado !== Number(range[3]))) {
+      throw new Error("RPC acknowledgement belongs to another batch");
+    }
+  } else if (mode === "validate") {
+    integer("cartografia_version_id", 1);
+    integer("errores");
+    integer("procesados");
+    integer("advertencias");
+    const phases = ["ESTRUCTURA", "PADRES", "SOLAPES", "COBERTURA", "CONTEOS", "COMPLETA"];
+    if (typeof response.completa !== "boolean" || !phases.includes(response.fase) ||
+        response.completa !== (response.fase === "COMPLETA") ||
+        !response.cursor || typeof response.cursor !== "object" || Array.isArray(response.cursor) ||
+        Object.values(response.cursor).some((value) => !Number.isSafeInteger(value) || value < 0) ||
+        (response.snapshot_sha256 !== null && !/^[0-9a-f]{64}$/.test(response.snapshot_sha256 ?? ""))) {
+      throw new Error("Invalid validation state");
+    }
+  } else if (mode === "publish") integer("version_seleccionada_id", 1);
+  else {
+    integer("carga_id", 1);
+    integer("cartografia_version_id", 1);
+  }
+  return response;
+}
+
 export async function executeCartographyPlan(
   plan,
   {
@@ -21,6 +71,9 @@ export async function executeCartographyPlan(
     runCommand = runCommandOnce,
     calculateFileHash = hashFile,
     onBatchConfirmed = async () => {},
+    onBatchBlocked = async () => {},
+    onBatchStarted = async () => {},
+    reviewRequired = false,
   } = {},
 ) {
   if (!MODES.has(mode)) throw new Error(`Unsupported cartography execution mode: ${mode}`);
@@ -52,8 +105,10 @@ export async function executeCartographyPlan(
   }
 
   assertDevProjectRef(projectRef);
+  if (reviewRequired) throw new Error("REVIEW_REQUIRED: audit the artifact before any further execution");
   const skipped = [];
   const completed = [];
+  const responses = [];
   for (const batch of selected) {
     if (confirmedChecksums.has(batch.checksum)) {
       skipped.push(batch.id);
@@ -61,15 +116,35 @@ export async function executeCartographyPlan(
     }
     const npmArgs = buildSupabaseDbQueryArgs(batch.filePath, projectRef);
     const invocation = buildNpmExecInvocation(npmArgs);
-    const result = await runCommand(invocation.command, invocation.args);
+    await onBatchStarted(batch);
+    let result;
+    try {
+      result = await runCommand(invocation.command, invocation.args);
+    } catch {
+      await onBatchBlocked(batch, { stdout: "", review_required: true, reason: "PROCESS_RESULT_UNKNOWN" });
+      throw new Error(`REVIEW_REQUIRED: ${batch.id} process result unknown. No automatic retry was attempted.`);
+    }
     if (result.exitCode !== 0) {
+      await onBatchBlocked(batch, { ...result, review_required: true, reason: "COMMAND_FAILED" });
       throw new Error(
         `Cartography step ${batch.id} failed. No automatic retry was attempted. ${result.stderr ?? ""}`.trim(),
       );
     }
-    await onBatchConfirmed(batch, result);
+    let response;
+    try {
+      response = parseCartographyResponse(result.stdout, mode, batch);
+    } catch {
+      await onBatchBlocked(batch, { ...result, review_required: true, reason: "ACKNOWLEDGEMENT_UNKNOWN" });
+      throw new Error(`REVIEW_REQUIRED: ${batch.id} acknowledgement unknown; audit remote state, do not replay.`);
+    }
+    const review_required = (response.rechazados ?? 0) > 0 || (response.errores ?? 0) > 0;
+    await onBatchConfirmed(batch, { ...result, response, review_required });
     confirmedChecksums.add(batch.checksum);
     completed.push(batch.id);
+    responses.push({ id: batch.id, response });
+    if (review_required) {
+      throw new Error(`REVIEW_REQUIRED: ${batch.id} committed with rechazados=${response.rechazados ?? 0}, errores=${response.errores ?? 0}; do not replay.`);
+    }
   }
-  return { mode, planned, skipped, completed };
+  return { mode, planned, skipped, completed, responses };
 }

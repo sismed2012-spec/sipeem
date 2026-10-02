@@ -9,10 +9,13 @@ export async function loadExecutionState(artifactRoot) {
       confirmed_checksums: Array.isArray(parsed.confirmed_checksums) ? parsed.confirmed_checksums : [],
       validation_runs: Number.isSafeInteger(parsed.validation_runs) ? parsed.validation_runs : 0,
       publication_confirmed: parsed.publication_confirmed === true,
+      responses: Array.isArray(parsed.responses) ? parsed.responses : [],
+      review_required: parsed.review_required === true,
     };
   } catch (error) {
     if (error?.code !== "ENOENT") throw error;
-    return { confirmed_checksums: [], validation_runs: 0, publication_confirmed: false };
+    return { confirmed_checksums: [], validation_runs: 0, publication_confirmed: false,
+      responses: [], review_required: false };
   }
 }
 

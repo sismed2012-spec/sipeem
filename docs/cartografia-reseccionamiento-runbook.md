@@ -37,7 +37,11 @@ npm.cmd run cartografia:import -- `
   --project-ref "nppvprbfmjbhwheghipa"
 ```
 
-La ejecución acepta exclusivamente el project ref de SIPEEM-DEV. Cada lote confirmado se guarda en `execution-state.json`; si el proceso se interrumpe, se vuelve a ejecutar el mismo comando y continúa desde el siguiente checksum. No hay reintentos automáticos. Ante un resultado incierto, revisar el estado remoto antes de reanudar.
+La ejecución acepta exclusivamente el project ref de SIPEEM-DEV. Cada lote confirmado se guarda en `execution-state.json`; al reanudar un estado confirmado sin bloqueos, se omiten esos checksums. No hay reintentos automáticos. Una interrupción con un paso pendiente exige revisar el estado remoto antes de reanudar.
+
+Cada comando guarda un marcador pendiente **antes** de abrir Supabase. Al recibir una respuesta RPC verificable, registra sus IDs, conteos y estado, además del checksum confirmado, y muestra la respuesta en consola. Un código de salida cero por sí solo ya no confirma el lote.
+
+Si aparecen `rechazados > 0` o errores de validación, el paso confirmado permanece registrado y el proceso se detiene con `REVIEW_REQUIRED`: no se repite el lote ni se ejecuta el siguiente. Una respuesta ilegible, fallo del comando o interrupción deja el resultado como incierto y conserva el bloqueo. Todos los modos mutantes quedan bloqueados incluso después de reiniciar; el preflight local sigue disponible. La reanudación requiere una auditoría del ledger remoto y una conciliación explícita de la evidencia local. No borrar `execution-state.json`, no quitar el bloqueo a ciegas ni generar un artefacto nuevo para eludirlo.
 
 El orden es: inicio de carga, recibos inmutables, entidad, municipios, distritos locales, distritos federales, secciones, colonias, localidades y límites de localidad. Los lotes tienen como máximo 250 filas y un límite de tamaño UTF-8.
 
@@ -50,6 +54,8 @@ npm.cmd run cartografia:validate -- `
 ```
 
 Cada invocación ejecuta un único paso de validación. Repetirlo manualmente sólo después de leer el resultado, hasta que la carga alcance su estado terminal válido. La validación no publica ni cambia la versión predeterminada.
+
+La respuesta visible incluye `fase`, `completa`, `errores` y los demás campos devueltos por la RPC. Los errores activan la misma puerta de revisión; `completa: true` con errores no equivale a una versión válida.
 
 ## 4. Publicar en DEV
 

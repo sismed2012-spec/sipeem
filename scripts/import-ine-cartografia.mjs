@@ -48,7 +48,7 @@ async function readJson(filePath) {
   return JSON.parse(await readFile(filePath, "utf8"));
 }
 
-export async function main(argv = process.argv.slice(2)) {
+export async function main(argv = process.argv.slice(2), { runCommand, log = console.log } = {}) {
   const args = parseArgs(argv);
   let artifactRoot = args.artifactRoot;
   let plan;
@@ -57,7 +57,7 @@ export async function main(argv = process.argv.slice(2)) {
     assertPreparationArgs(args);
     const prepared = await prepareCartographyArtifacts({
       ...args,
-      onProgress: (message) => console.log(`[cartografia] ${message}`),
+      onProgress: (message) => log(`[cartografia] ${message}`),
     });
     artifactRoot = prepared.root;
     plan = prepared.plan;
@@ -79,7 +79,22 @@ export async function main(argv = process.argv.slice(2)) {
     projectRef: args.projectRef,
     artifactRoot,
     confirmedChecksums: confirmed,
-    onBatchConfirmed: async (batch) => {
+    reviewRequired: state.review_required,
+    runCommand,
+    onBatchStarted: async (batch) => {
+      state.review_required = true;
+      state.responses.push({ id: batch.id, checksum: batch.checksum, mode: args.mode,
+        committed: null, reason: "EXECUTION_STARTED", observed_at: new Date().toISOString() });
+      await saveExecutionState(artifactRoot, state);
+    },
+    onBatchBlocked: async (batch, observed) => {
+      state.review_required = true;
+      state.responses.push({ id: batch.id, checksum: batch.checksum, mode: args.mode,
+        committed: null, reason: observed.reason, stdout: observed.stdout,
+        observed_at: new Date().toISOString() });
+      await saveExecutionState(artifactRoot, state);
+    },
+    onBatchConfirmed: async (batch, observed) => {
       if (args.mode === "validate") state.validation_runs += 1;
       else {
         if (!state.confirmed_checksums.includes(batch.checksum)) {
@@ -87,10 +102,15 @@ export async function main(argv = process.argv.slice(2)) {
         }
         if (args.mode === "publish") state.publication_confirmed = true;
       }
+      state.review_required = observed.review_required;
+      state.responses.push({ id: batch.id, checksum: batch.checksum, mode: args.mode,
+        committed: true, response: observed.response, observed_at: new Date().toISOString() });
       await saveExecutionState(artifactRoot, state);
+      log(JSON.stringify({ step: batch.id, response: observed.response,
+        review_required: observed.review_required }));
     },
   });
-  console.log(JSON.stringify({ artifactRoot, preflight, result }, null, 2));
+  log(JSON.stringify({ artifactRoot, preflight, result }, null, 2));
   return { artifactRoot, preflight, result };
 }
 
