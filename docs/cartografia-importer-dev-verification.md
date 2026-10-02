@@ -208,3 +208,41 @@ Huellas de cierre:
 - Journal final: `7d7c3f428bab968a4052a8ad1a9aa0422881e2bc0d5f5690f3cab65b451ad507`.
 
 El journal conserva 184 validaciones confirmadas, 127 checksums de importación, `review_required: false` y `publication_confirmed: false`. La suite completa de scripts renovada pasó: 275 pruebas, 271 aprobadas, cuatro integraciones optativas omitidas y cero fallos. Los informes `coverage-phase-execution-report.json` y `coverage-phase-integrity-report.json` y la auditoría operativa se conservaron dentro del artefacto. `checkpoint-185.json` contiene CONTEOS/cursor vacío, coincide con el último ACK y no se ejecutó. Antes de retomarlo hay que renovar el preflight de READ ONLY. Quedan pendientes CONTEOS y la aceptación integral. Sin cambios de código de producto o migraciones, sin publicación, sin PROD, sin despliegues manuales ni fusión del PR.
+
+## CONTEOS y cierre del ensayo de importación/validación — 2026-10-02
+
+Se continuó exclusivamente el ensayo 4037/carga 1795 en SIPEEM-DEV. Antes de ejecutar se repitió el preflight nativo de READ ONLY, el `2026-10-02T23:22:42.498318+00:00`: CONTEOS/cursor vacío, cero errores, 5.032 advertencias, snapshot y ocho conteos sellados idénticos. La auditoría histórica de COBERTURA pasó nuevamente antes de avanzar. Veintiocho casos negativos locales comprobaron el rechazo de discrepancias del control terminal, sin llamadas remotas.
+
+Se ejecutó una única invocación nativa `--validate` con `checkpoint-185.json`, sin reintentos automáticos. El ACK confirmó `COMPLETA`, `completa: true`, ocho capas comprobadas, cursor vacío, cero errores y 5.032 advertencias. El postflight de READ ONLY del `2026-10-02T23:28:51.146161+00:00` confirmó versión 4037 `VALIDADA`, no predeterminada; carga 1795 `COMPLETA`, no reanudable, sin código ni detalle de fallo, y fechas de finalización presentes. Los conteos esperados, validados, fuente y snapshot coinciden. COMPLETA es terminal: no se generó otro checkpoint ejecutable ni se llamó de nuevo al validador.
+
+Los datos se mantienen íntegros: ENTIDAD 1, MUNICIPIO 125, DISTRITO_LOCAL 45, DISTRITO_FEDERAL 40, SECCION 7.052, COLONIA 7.367, LOCALIDAD 3.639 y LIMITE_LOCALIDAD 1.826; total 20.095 registros, todos recibidos/insertados, cero repetidos/rechazados. Se conservan 7.316 polígonos de colonia y 51 filas sin geometría, 1.384 relaciones localidad-límite, 1.327 límites con punto y 499 sin punto. Las huellas de los grafos y de los recibos aprobados permanecen iguales.
+
+El postflight integral renovado, `2026-10-02T23:29:48.154214+00:00`, contrastó los 125 rangos remotos con el plan sellado y sus conteos. La auditoría reconstruyó los conjuntos ordenados de hashes fuente de las ocho capas directamente desde los payloads Base64 de los 125 SQL de geometrías y los comparó con las huellas remotas: coincidencia exacta en todas las capas y con el postflight de importación anterior. Los tres archivos locales de recibos coinciden con los payloads SQL sellados; sus hashes de JSONB canónico coinciden con los tres recibos remotos. El manifiesto de inicio conserva los hashes de los ZIP originales.
+
+Las incidencias permanecieron exactamente iguales al preflight, todas ADVERTENCIA:
+
+- 51 GEOMETRIA_NULA_ORIGEN/COLONIA.
+- 1.608 PERTENENCIA_ESPACIAL_NO_COINCIDE/SECCION.
+- 3.249 SOLAPE_SECCIONES/SECCION.
+- 124 HUECO_MUNICIPAL/MUNICIPIO.
+
+No se corrigieron geometrías ni se aceptaron advertencias para publicación. Se conservaron los controles y detalles espaciales anteriores: áreas de solape positivas menores de 1 m² y huecos dentro del umbral municipal, sin detalles malformados, áreas no positivas o discrepancias de severidad.
+
+La auditoría offline final verificó 185 ACK confirmados: un inicio SIN_INICIAR, 29 PADRES, 29 SOLAPES, 125 COBERTURA y un CONTEOS. Los 185 checkpoints, archivos SQL, checksums, contenido regenerado e informes de lectura coinciden; la cadena de fase/cursor es íntegra. El informe histórico 001 se sigue leyendo en su formato original, exigiendo 14/14 controles. Una primera aserción local del recuento llamó erróneamente INICIAL al primer checkpoint; el contrato y el archivo histórico confirman SIN_INICIAR. La comprobación falló antes del transporte, se corrigió únicamente esa etiqueta en la auditoría local y pasó íntegramente. No se alteró evidencia histórica ni se repitió una ejecución remota.
+
+Los 127 checksums de importación siguen coincidiendo con sus archivos y el plan. Reconstruir el journal previo a CONTEOS devuelve exactamente `7d7c3f428bab968a4052a8ad1a9aa0422881e2bc0d5f5690f3cab65b451ad507`. El plan y el journal bloqueado de origen permanecen byte a byte intactos. Un replay simulado del checkpoint 185 fue rechazado como ya confirmado antes de abrir Supabase: cero llamadas de transporte y journal sin cambios. El journal final tiene 185 validaciones confirmadas, `review_required: false` y `publication_confirmed: false`; la ausencia de bloqueo técnico no acepta las advertencias para publicación.
+
+La única versión predeterminada continúa siendo 4025 PUBLICADA, con snapshot `352f67bb9d36f8d00fe73e0979493ba1e478a4f38365dc7576a75ce954050152` y carga 1793 COMPLETA. El snapshot del ensayo conserva `559d9ed48f1a9ca0eaee99bc18938c186def2bf06762bd17ec1b932992ccc7dd`. La RPC exacta continúa restringida a service_role entre los roles API comprobados; la base sigue sin EXECUTE para service_role. No se cambiaron esquema, ACL ni índices.
+
+Huellas de cierre:
+
+- SQL del único paso CONTEOS: `94b45ca051d31a58b4a7534ccc4ba16b0702da9b5f9602fac1c02319c8208522`.
+- SQL del observador terminal: `8ffacf698c5e5389a3903eb57e431e3620a895344f69e414f063495d4774c439`.
+- SQL del postflight integral: `5d967f43c2de985ecfe8572dbf33cb0e06108b18f432b441c21dbbf9fb4089b1`.
+- Journal final: `07f7619c4671520a3d9c95bfd21ef219614d8c2cb211b9b48e669683511b8c4c`.
+
+Verificación local renovada: todos los 48 archivos de pruebas de scripts, 275 pruebas, 271 aprobadas, cuatro integraciones optativas omitidas y cero fallos. Se ejecutó por separado la regresión optativa con los dos ZIP originales del INE: una prueba aprobada, cero omitidas/fallos y cero llamadas remotas. Reprodujo los hashes aprobados, ocho conteos, continuidad/presupuesto de los lotes y grafos localidad-límite.
+
+La evidencia queda en el artefacto replanteado: `counts-phase-execution-report.json`, preflight/postflight 185, `integral-readonly-postflight-report.json`, `integral-closure-audit.mjs`, `integral-integrity-report.json`, ambos informes de pruebas e `integral-acceptance-report.json`. Alcance aceptado: **importación y validación del paquete aprobado en el ensayo aislado de DEV, con advertencias conservadas**. No es aceptación de publicación, de concurrencia ni del paquete nuevo de noviembre; tampoco declara terminado todo el Subplan 1. Siguiente puerta: revisar las advertencias y la evidencia del PR antes de decidir fusión o publicación separada. Sin cambios de código de producto/migraciones, sin publicación, sin PROD, sin despliegues manuales ni fusión del PR.
+
+Revisión independiente del cierre, exclusivamente local y de solo lectura: sin hallazgos críticos, importantes ni menores. Recalculó los 185 checkpoints/ACK/SQL/informes, 127 checksums, 125 rangos, ocho digests fuente y tres digests de recibos; confirmó la única pareja inicio/ACK de CONTEOS, ausencia de checkpoint 186, journals intactos y advertencias sin cambios. No repitió las suites ni hizo llamadas remotas. Dictamen limitado: listo para registrar este cierre documental, no para fusionar/publicar/desplegar el PR completo. El informe está en `integral-independent-review-report.json`. Conservar el directorio del artefacto sellado: sus archivos están ignorados por Git y son necesarios para reproducir la auditoría.
