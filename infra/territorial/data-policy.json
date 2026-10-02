@@ -1,0 +1,149 @@
+{
+  "contractVersion": 3,
+  "sourceProjectRef": "nppvprbfmjbhwheghipa",
+  "sourceInventorySha256": "5f6199fd6d1de9036149afabf6b377e395c460b3c8c30641aac48ef7c988d9d9",
+  "sourceSnapshot": {
+    "capturedAt": "2026-10-01",
+    "tableCount": 66,
+    "foreignKeyCount": 152,
+    "sequenceCount": 56,
+    "dependencyCount": 56
+  },
+  "include": [
+    { "table": "public.cargas_cartograficas", "reason": "Canonical territorial load control." },
+    { "table": "public.cargas_cartograficas_lotes", "reason": "Canonical territorial load ledger." },
+    { "table": "public.cargas_electorales", "reason": "Canonical electoral load control." },
+    { "table": "public.cartografia_archivos", "reason": "Canonical cartography source-file evidence." },
+    { "table": "public.cartografia_cobertura_colonias_recibos", "reason": "Canonical colony coverage receipts." },
+    { "table": "public.cartografia_cobertura_limites_localidad_recibos", "reason": "Canonical locality-boundary coverage receipts." },
+    { "table": "public.cartografia_codificaciones_recibos", "reason": "Canonical cartography encoding receipts." },
+    { "table": "public.cartografia_colonias", "reason": "Canonical versioned colony geometry." },
+    { "table": "public.cartografia_colonias_sin_geometria", "reason": "Canonical reviewed colony exceptions." },
+    { "table": "public.cartografia_distritos_federales", "reason": "Canonical versioned federal districts." },
+    { "table": "public.cartografia_distritos_locales", "reason": "Canonical versioned local districts." },
+    { "table": "public.cartografia_entidades", "reason": "Canonical versioned state cartography." },
+    { "table": "public.cartografia_incidencias", "reason": "Canonical cartography validation evidence." },
+    { "table": "public.cartografia_limites_localidad", "reason": "Canonical locality boundary geometry." },
+    { "table": "public.cartografia_limites_localidad_puntos", "reason": "Canonical locality-boundary point correspondence." },
+    { "table": "public.cartografia_localidades", "reason": "Canonical versioned locality geometry." },
+    { "table": "public.cartografia_municipios", "reason": "Canonical versioned municipality geometry." },
+    { "table": "public.cartografia_secciones", "reason": "Canonical versioned electoral-section geometry." },
+    { "table": "public.cartografia_secciones_equivalencias", "reason": "Canonical section equivalence history." },
+    { "table": "public.cartografia_versiones", "reason": "Canonical cartography version registry." },
+    { "table": "public.cartografia_versiones_bitacora", "reason": "Canonical cartography audit trail." },
+    { "table": "public.demografia_cargas_lotes", "reason": "Canonical demographic load ledger." },
+    { "table": "public.demografia_eceg_correspondencias", "reason": "Canonical ECEG section correspondence." },
+    { "table": "public.demografia_eceg_secciones", "reason": "Canonical ECEG section indicators." },
+    { "table": "public.demografia_fuentes", "reason": "Canonical demographic source registry." },
+    { "table": "public.demografia_indicadores", "reason": "Canonical demographic indicator dictionary." },
+    { "table": "public.demografia_localidad_correspondencia_secciones", "reason": "Canonical locality-to-section allocation." },
+    { "table": "public.demografia_localidad_correspondencias", "reason": "Canonical locality correspondence decisions." },
+    { "table": "public.demografia_localidades", "reason": "Canonical locality demographic records." },
+    { "table": "public.demografia_secciones", "reason": "Canonical demographic section aggregates." },
+    { "table": "public.demografia_secciones_cobertura", "reason": "Canonical demographic coverage metrics." },
+    { "table": "public.elecciones", "reason": "Canonical election registry." },
+    { "table": "public.evento_actores", "reason": "Canonical territorial event actors." },
+    { "table": "public.evento_evidencias", "reason": "Canonical territorial event evidence." },
+    { "table": "public.evento_georreferenciacion", "reason": "Canonical event georeferencing history." },
+    { "table": "public.evento_historial", "reason": "Canonical territorial event audit history." },
+    { "table": "public.eventos_territoriales", "reason": "Canonical territorial events." },
+    { "table": "public.fuerzas_electorales", "reason": "Canonical electoral forces." },
+    { "table": "public.fuerzas_electorales_aliases", "reason": "Canonical electoral-force aliases." },
+    { "table": "public.fuerzas_electorales_integrantes", "reason": "Canonical electoral-force membership." },
+    { "table": "public.lista_nominal_correspondencias", "reason": "Canonical nominal-list correspondences." },
+    { "table": "public.lista_nominal_cortes", "reason": "Canonical nominal-list cut registry." },
+    { "table": "public.lista_nominal_secciones", "reason": "Canonical nominal-list section values." },
+    { "table": "public.listas_nominales", "reason": "Canonical election-linked nominal lists." },
+    { "table": "public.participacion_electoral", "reason": "Canonical electoral participation." },
+    { "table": "public.partidos_catalogo", "reason": "Canonical political-party catalog." },
+    { "table": "public.resultados_electorales", "reason": "Canonical electoral results." },
+    { "table": "public.resultados_municipales_oficiales", "reason": "Canonical official municipality results." },
+    { "table": "public.resultados_municipales_oficiales_fuerzas", "reason": "Canonical official municipality force results." },
+    { "table": "public.territorios_colonias", "reason": "Canonical stable colony identities." },
+    { "table": "public.territorios_distritos_federales", "reason": "Canonical stable federal-district identities." },
+    { "table": "public.territorios_distritos_locales", "reason": "Canonical stable local-district identities." },
+    { "table": "public.territorios_localidades", "reason": "Canonical stable locality identities." },
+    { "table": "public.territorios_municipios", "reason": "Canonical stable municipality identities." },
+    { "table": "public.territorios_secciones", "reason": "Canonical stable electoral-section identities." },
+    { "table": "public.validaciones_cartograficas_progreso", "reason": "Canonical cartography validation checkpoint." },
+    { "table": "public.validaciones_electorales_progreso", "reason": "Canonical electoral validation checkpoint." }
+  ],
+  "exclude": [
+    {
+      "table": "public.staging_electoral_incidencias",
+      "reason": "Transient electoral validation findings; reproducible from reviewed source loads.",
+      "documentedIncomingDependencies": []
+    },
+    {
+      "table": "public.staging_electoral_registros",
+      "reason": "Transient raw electoral staging records; excluded to avoid promoting source-system payload duplication.",
+      "documentedIncomingDependencies": []
+    },
+    {
+      "table": "public.staging_electoral_resultados",
+      "reason": "Transient raw electoral result staging; canonical promoted results remain included.",
+      "documentedIncomingDependencies": [
+        {
+          "fromTable": "public.resultados_municipales_oficiales_fuerzas",
+          "constraint": "resultados_municipales_oficiales_fuer_resultado_staging_id_fkey",
+          "reason": "The nullable source-trace pointer is non-canonical provenance; restore handling must preserve the official result while not requiring transient staging rows."
+        }
+      ]
+    }
+  ],
+  "restoreTransforms": [
+    {
+      "type": "null_orphan_reference",
+      "table": "public.resultados_municipales_oficiales_fuerzas",
+      "column": "resultado_staging_id",
+      "referencedTable": "public.staging_electoral_resultados",
+      "referencedColumn": "resultado_staging_id",
+      "nullable": true,
+      "reason": "Preserve every canonical official-force result while clearing only provenance pointers whose transient staging rows are intentionally excluded."
+    }
+  ],
+  "preseeded": [
+    {
+      "table": "public.cat_estados_evento",
+      "reason": "Created and populated by the reviewed territorial catalog migration.",
+      "migration": "20260912034515_catalogos.sql",
+      "orderBy": ["estado_evento_id"],
+      "ownedSequences": ["public.cat_estados_evento_estado_evento_id_seq"]
+    },
+    {
+      "table": "public.cat_estados_georreferenciacion",
+      "reason": "Created and populated by the reviewed territorial catalog migration.",
+      "migration": "20260912034515_catalogos.sql",
+      "orderBy": ["estado_geo_id"],
+      "ownedSequences": ["public.cat_estados_georreferenciacion_estado_geo_id_seq"]
+    },
+    {
+      "table": "public.cat_fuentes_evento",
+      "reason": "Created and populated by the reviewed territorial catalog migration.",
+      "migration": "20260912034515_catalogos.sql",
+      "orderBy": ["fuente_evento_id"],
+      "ownedSequences": ["public.cat_fuentes_evento_fuente_evento_id_seq"]
+    },
+    {
+      "table": "public.cat_niveles_sensibilidad",
+      "reason": "Created and populated by the reviewed territorial catalog migration.",
+      "migration": "20260912034515_catalogos.sql",
+      "orderBy": ["nivel"],
+      "ownedSequences": []
+    },
+    {
+      "table": "public.cat_tipos_asentamiento",
+      "reason": "Created and populated by the reviewed territorial catalog migration.",
+      "migration": "20260912034515_catalogos.sql",
+      "orderBy": ["tipo_asentamiento_id"],
+      "ownedSequences": ["public.cat_tipos_asentamiento_tipo_asentamiento_id_seq"]
+    },
+    {
+      "table": "public.cat_tipos_fuerza_electoral",
+      "reason": "Created and populated by the reviewed electoral-force migration.",
+      "migration": "20260912045859_fuerzas_electorales.sql",
+      "orderBy": ["tipo_fuerza_id"],
+      "ownedSequences": ["public.cat_tipos_fuerza_electoral_tipo_fuerza_id_seq"]
+    }
+  ]
+}

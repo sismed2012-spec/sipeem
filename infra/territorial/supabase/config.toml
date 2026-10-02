@@ -1,0 +1,10 @@
+project_id = "sipeem-territorial"
+
+[api]
+enabled = true
+schemas = ["public"]
+extra_search_path = ["public", "extensions", "territorial_private"]
+max_rows = 1000
+
+[db]
+major_version = 17

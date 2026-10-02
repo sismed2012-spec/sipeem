@@ -157,6 +157,14 @@ Ejemplos:
 Define estas variables en `.env.local`:
 
 ```env
+# Supabase principal: autenticacion y operacion de SIPEEM
+NEXT_PUBLIC_SUPABASE_URL=https://YOUR_MAIN_PROJECT.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-main-publishable-key
+
+# Supabase territorial: consultas exclusivamente desde el servidor
+CARTOGRAFIA_SUPABASE_URL=https://YOUR_TERRITORIAL_PROJECT.supabase.co
+CARTOGRAFIA_SUPABASE_SERVICE_ROLE_KEY=your-territorial-server-key
+
 ARCGIS_PORTAL_URL=https://www.arcgis.com
 ARCGIS_AUTH_MODE=token
 ARCGIS_TOKEN=your-arcgis-token
@@ -168,6 +176,20 @@ ARCGIS_LAYER_RUTAS_URL=https://.../FeatureServer/0
 
 NEXT_PUBLIC_ENABLE_ARCGIS_MAP=false
 ```
+
+`CARTOGRAFIA_SUPABASE_SERVICE_ROLE_KEY` es un nombre de compatibilidad del
+proyecto. Debe contener una credencial de servidor de Supabase; se recomienda
+una clave `sb_secret_...` cuando el proyecto la tenga disponible. Nunca debe
+llevar el prefijo `NEXT_PUBLIC_`, copiarse al codigo cliente ni utilizarse para
+la autenticacion de usuarios.
+
+La separacion es deliberada:
+
+- el Supabase principal conserva Auth, sesiones y datos operativos;
+- el Supabase territorial atiende las RPC de cartografia, demografia, lista
+  nominal e indicadores;
+- ArcGIS sigue siendo la capa de representacion SIG y no recibe la credencial
+  territorial.
 
 ## Checklist operativo en ArcGIS
 

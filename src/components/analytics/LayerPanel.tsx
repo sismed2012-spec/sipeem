@@ -1,5 +1,7 @@
 "use client";
 
+import type { ReactNode } from "react";
+
 import { cn } from "@/lib/utils";
 
 export type OverlayKey =
@@ -24,17 +26,25 @@ const OVERLAY_LAYERS: OverlayLayer[] = [
 
 interface Props {
   activeOverlays: Set<OverlayKey>;
+  requiredOverlay?: OverlayKey | null;
   onToggle: (key: OverlayKey) => void;
   hasMunicipioSelected: boolean;
+  sectionAvailable?: boolean;
+  sectionFallback?: boolean;
   coberturaMap?: Record<number, { compromisos: number; meta: number }>;
+  indicatorControls?: ReactNode;
   className?: string;
 }
 
 export function LayerPanel({
   activeOverlays,
+  requiredOverlay = null,
   onToggle,
   hasMunicipioSelected,
+  sectionAvailable = true,
+  sectionFallback = false,
   coberturaMap = {},
+  indicatorControls,
   className,
 }: Props) {
   const hasCoberturaData = Object.keys(coberturaMap).length > 0;
@@ -57,15 +67,32 @@ export function LayerPanel({
         <span className="text-slate-600 text-[9px] ml-auto">base</span>
       </div>
 
+      {indicatorControls}
+
       {OVERLAY_LAYERS.map((layer) => {
         const active = activeOverlays.has(layer.key);
-        const disabled = layer.lazy && !hasMunicipioSelected && !active;
+        const required = requiredOverlay === layer.key;
+        const disabled = required || (
+          layer.lazy &&
+          (!hasMunicipioSelected || !sectionAvailable) &&
+          !active
+        );
+        const disabledTitle = required
+          ? "Requerida por el indicador territorial"
+          : !sectionAvailable
+            ? "Cartografía versionada no disponible"
+            : "Selecciona un municipio primero";
+
+        const label = layer.key === "seccion" && sectionFallback
+          ? "Sección (sin versión)"
+          : layer.label;
 
         return (
           <button
             key={layer.key}
             onClick={() => !disabled && onToggle(layer.key)}
-            title={disabled ? "Selecciona un municipio primero" : undefined}
+            title={disabled ? disabledTitle : undefined}
+            disabled={disabled}
             className={cn(
               "w-full flex items-center gap-2 py-1.5 border-b border-slate-700/30 last:border-0 text-left transition-opacity",
               disabled && "opacity-40 cursor-not-allowed"
@@ -84,7 +111,7 @@ export function LayerPanel({
                 active ? "text-slate-100 font-semibold" : "text-slate-400"
               )}
             >
-              {layer.label}
+              {label}
             </span>
             {layer.lazy && (
               <span className="text-slate-600 text-[9px] ml-auto">lazy</span>
@@ -95,6 +122,11 @@ export function LayerPanel({
 
       {activeOverlays.has("seccion") && (
         <div className="border-t border-slate-700 pt-2 mt-2">
+          {sectionFallback && (
+            <p className="mb-2 rounded bg-amber-950/60 px-2 py-1 text-[9px] leading-relaxed text-amber-200">
+              Demografía y lista nominal deshabilitadas: geometría ArcGIS sin versión.
+            </p>
+          )}
           <p className="text-[9px] text-slate-500 uppercase tracking-widest mb-1.5">
             Cobertura {hasCoberturaData ? "" : "(sin datos)"}
           </p>
