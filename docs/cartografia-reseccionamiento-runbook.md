@@ -45,6 +45,8 @@ Si aparecen `rechazados > 0` o errores de validación, el paso confirmado perman
 
 El orden es: inicio de carga, recibos inmutables, entidad, municipios, distritos locales, distritos federales, secciones, colonias, localidades y límites de localidad. Los lotes tienen como máximo 250 filas y un límite de tamaño UTF-8.
 
+El presupuesto predeterminado es 600.000 bytes de JSON de features. Después de codificar a Base64 se verifica también el SQL dentro de la envoltura JSON de transporte: como política local conservadora, 900.000 bytes incluyendo 4.096 bytes de margen. El generador y el ejecutor rechazan archivos que excedan ese presupuesto antes de llamar a Supabase. No representa una garantía ni una declaración del límite exacto del proveedor. Si falla una solicitud por tamaño, auditar primero el ledger remoto y replanificar en un directorio separado; conservar el bloqueo y la evidencia hasta completar la conciliación.
+
 ## 3. Validar
 
 ```powershell
@@ -94,4 +96,4 @@ $env:SIPEEM_CARTOGRAFIA_BGD_ZIP = "C:\ruta\bgd_15_Shapefile.zip"
 node --test scripts/cartografia/real-packages.integration.test.mjs
 ```
 
-Comprueba los hashes aprobados, los ocho conteos, los recibos territoriales y los 88 pasos reanudables sin escribir en Supabase.
+Comprueba los hashes aprobados, los ocho conteos, los recibos territoriales y la continuidad y presupuesto de todos los lotes sin escribir en Supabase. El número de pasos depende del presupuesto de transporte; no cambia el número de filas fuente.

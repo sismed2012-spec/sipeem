@@ -1,4 +1,5 @@
 import path from "node:path";
+import { readFile } from "node:fs/promises";
 
 import {
   assertDevProjectRef,
@@ -8,6 +9,7 @@ import {
 } from "../lista-nominal/supabase-cli.mjs";
 
 import { hashFile } from "./archive.mjs";
+import { assertCartographyTransportBudget } from "./sql-batches.mjs";
 
 const MODES = new Set(["preflight", "import", "validate", "publish"]);
 
@@ -70,6 +72,7 @@ export async function executeCartographyPlan(
     confirmedChecksums = new Set(),
     runCommand = runCommandOnce,
     calculateFileHash = hashFile,
+    readSql = (file) => readFile(file, "utf8"),
     onBatchConfirmed = async () => {},
     onBatchBlocked = async () => {},
     onBatchStarted = async () => {},
@@ -98,6 +101,7 @@ export async function executeCartographyPlan(
     if (actualChecksum !== batch.checksum) {
       throw new Error(`Cartography step ${batch.id} checksum differs from the sealed plan`);
     }
+    assertCartographyTransportBudget(await readSql(resolvedFile));
   }
   const planned = selected.map((batch) => batch.id);
   if (mode === "preflight") {

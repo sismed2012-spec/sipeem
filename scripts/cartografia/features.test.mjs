@@ -5,6 +5,7 @@ import {
   buildFeatureBatches,
   normalizeCartographyFeature,
 } from "./features.mjs";
+import { buildImportSql } from "./sql-batches.mjs";
 
 const polygon = {
   type: "Polygon",
@@ -146,6 +147,18 @@ describe("cartography feature normalization", () => {
 });
 
 describe("cartography feature batching", () => {
+  it("bounds encoded SQL transport, not only the unencoded UTF-8 JSON", () => {
+    const features = [1, 2, 3].map((fila) => ({ fila, atributos: { nombre: "é".repeat(130_000) } }));
+    const batches = buildFeatureBatches("MUNICIPIO", features);
+    assert.deepEqual(batches.map(({ desde, hasta }) => [desde, hasta]), [[1, 2], [3, 3]]);
+    for (const batch of batches) {
+      const sql = buildImportSql({ versionKey: "ENSAYO", batch });
+      assert.ok(Buffer.byteLength(JSON.stringify({ query: sql }), "utf8") <= 900_000);
+    }
+    assert.throws(() => buildImportSql({ versionKey: "ENSAYO", batch: {
+      capa: "MUNICIPIO", desde: 1, hasta: 3, features,
+    } }), /transport.*budget/i);
+  });
   it("creates contiguous resumable batches bounded by rows and UTF-8 bytes", () => {
     const features = Array.from({ length: 503 }, (_, index) => ({
       fila: index + 1,

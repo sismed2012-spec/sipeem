@@ -23,6 +23,7 @@ import {
   buildLimitsEvidence,
 } from "./receipts.mjs";
 import {
+  assertCartographyTransportBudget,
   buildCoverageSql,
   buildImportSql,
   buildPublishSql,
@@ -136,6 +137,7 @@ function currentLimitsCompatibility(bgdSha256, receipt) {
 }
 
 async function writeSqlStep(sqlRoot, fileName, sql, id) {
+  assertCartographyTransportBudget(sql);
   const filePath = path.join(sqlRoot, fileName);
   await writeTextAtomic(filePath, sql);
   return { id, filePath, checksum: await hashFile(filePath) };

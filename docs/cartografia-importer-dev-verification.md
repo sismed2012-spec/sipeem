@@ -50,3 +50,17 @@ Las cuatro regresiones iniciales fallaron contra el ejecutor anterior y pasaron 
 Verificación nativa: una consulta `BEGIN READ ONLY` que devuelve JSON controlado (no llama a una RPC mutante) pasó por el parser y preservó el contador de rechazados; tres pruebas aprobadas. Suite local de scripts final: 264 pruebas, 261 aprobadas, tres optativas omitidas, cero fallos. No se volvió a importar cartografía, no se validó/publicó remotamente ni se modificó PROD en esta etapa. La prueba integral de todas las capas sigue pendiente.
 
 La revisión independiente identificó validación insuficiente del resto del ACK de validación. Se reprodujo y corrigió mediante regresión RED→GREEN: fases cerradas, coherencia fase/completa, contadores procesados/advertencias no negativos, cursor numérico y hash de snapshot válido o NULL. Las respuestas malformadas no levantan el bloqueo. También se comprobaron localmente la validación terminal con errores y el ACK de publicación. Fuera del alcance de esta corrección: aceptación integral, cambios de migraciones/ACL, concurrencia y autorización de publicación. No se fusionó el PR.
+
+## Ensayo integral detenido por transporte — 2026-10-02
+
+Se preparó un directorio aislado `ensayo-integral-20261002` con la clave `ENSAYO_IMPORTADOR_INTEGRAL_20261002` y se ejecutó una sola vez el importador nativo en DEV. Quedaron confirmados inicio, las tres evidencias y ENTIDAD 1–1: versión de ensayo 4037, carga 1795. MUNICIPIO 1–125 recibió HTTP 413 `request entity too large`; el proceso salió con error y dejó `review_required: true`, sin ejecutar el siguiente paso ni reintentar el comando.
+
+Auditoría posterior de solo lectura: carga 1795 CARGANDO, capa ENTIDAD, cursor 1, una fila recibida/insertada, cero rechazadas; cero municipios y cero lotes MUNICIPIO confirmados en el ensayo. La versión publicada 4025 permanece predeterminada y su huella de snapshot conserva exactamente `352f67bb9d36f8d00fe73e0979493ba1e478a4f38365dc7576a75ce954050152` respecto al preflight. No se borró el ensayo: se conserva para conciliación y reanudación controlada.
+
+Causa: el límite anterior se medía sobre JSON antes de Base64. Se redujo el presupuesto predeterminado a 600.000 bytes y se añadió una barrera sobre el tamaño final de la solicitud SQL, con presupuesto local conservador de 900.000 bytes y margen de 4.096. La regresión con texto UTF-8 pasó de fallo a éxito y el ejecutor bloquea también un SQL sellado demasiado grande antes de conectarse.
+
+Se preparó, sin aplicarlo, un nuevo directorio `ensayo-integral-20261002-replan`: 127 pasos de importación, máximo SQL de 800.382 bytes, mismos ocho conteos y recibo compatible. Se copió el estado bloqueado del predecesor; no se levantó `review_required` ni se reintentó la carga. La prueba optativa `transport.integration.test.mjs` verificó todos los checksums y ejecutó únicamente `EXPLAIN (ANALYZE false)` del lote más grande dentro de READ ONLY: pasó 1/1. Esto confirma transporte y planificación, no importación de las geometrías.
+
+Verificación final local: 267 pruebas, 263 aprobadas, cuatro optativas omitidas, cero fallos; ESLint de los archivos cambiados sin errores. El preflight del ejecutor sobre el nuevo artefacto pasó, con 127 pasos previstos y cero ejecutados.
+
+Pendiente: conciliar expresamente el estado y los rangos del plan nuevo antes de reanudar la carga 1795; ejecutar después las demás capas y la validación controlada. Sin publicación, sin PROD y sin fusión del PR.

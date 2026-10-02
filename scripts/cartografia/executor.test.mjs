@@ -23,6 +23,7 @@ function executionOptions(overrides = {}) {
   return {
     artifactRoot: process.cwd(),
     calculateFileHash: async (filePath) => checksumByFile.get(filePath.split(/[\\/]/).at(-1)),
+    readSql: async () => "select 1;",
     ...overrides,
   };
 }
@@ -125,6 +126,16 @@ describe("safe cartography executor", () => {
       })),
       /checksum differs from the sealed plan/i,
     );
+    assert.equal(calls, 0);
+  });
+
+  it("blocks oversized sealed SQL before opening Supabase", async () => {
+    let calls = 0;
+    await assert.rejects(executeCartographyPlan(plan, executionOptions({
+      mode: "import", projectRef: "nppvprbfmjbhwheghipa",
+      readSql: async () => "x".repeat(900_000),
+      runCommand: async () => { calls++; },
+    })), /transport.*budget/);
     assert.equal(calls, 0);
   });
 

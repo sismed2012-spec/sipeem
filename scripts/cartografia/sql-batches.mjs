@@ -2,6 +2,13 @@ function sqlLiteral(value) {
   return `'${String(value).replaceAll("'", "''")}'`;
 }
 
+// Conservative local policy, not a claim about the provider's exact limit.
+export function assertCartographyTransportBudget(sql) {
+  if (Buffer.byteLength(JSON.stringify({ query: sql }), "utf8") + 4096 > 900_000) {
+    throw new Error("Cartography SQL exceeds the transport byte budget; replan before execution");
+  }
+}
+
 function jsonbBase64(value) {
   const encoded = Buffer.from(JSON.stringify(value), "utf8").toString("base64");
   return `pg_catalog.convert_from(pg_catalog.decode('${encoded}','base64'),'UTF8')::jsonb`;
@@ -66,13 +73,15 @@ export function buildImportSql({ versionKey, batch }) {
   if (!batch || !Number.isSafeInteger(batch.desde) || !Number.isSafeInteger(batch.hasta)) {
     throw new Error("A bounded import batch is required");
   }
-  return statement(`select public.rpc_importar_lote_cartografico_sin_replay(
+  const sql = statement(`select public.rpc_importar_lote_cartografico_sin_replay(
   ${loadIdQuery(versionKey)},
   ${sqlLiteral(batch.capa)},
   ${batch.desde},
   ${batch.hasta},
   ${jsonbBase64(batch.features)}
 );`);
+  assertCartographyTransportBudget(sql);
+  return sql;
 }
 
 export function buildValidateSql({ versionKey, batchSize = 250 }) {

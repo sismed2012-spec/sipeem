@@ -44,7 +44,20 @@ test("real INE packages reproduce the approved immutable territorial contract", 
       },
     );
     assert.equal(prepared.preflight.database_compatibility.applyAllowedByCurrentSchema, true);
-    assert.equal(prepared.plan.import.length, 88);
+    for (const [layer, summary] of Object.entries(prepared.preflight.layers)) {
+      const steps = prepared.plan.import.filter((step) => step.id.startsWith(`${layer}:`));
+      let next = 1;
+      for (const step of steps) {
+        const [, range] = step.id.split(":");
+        const [from, to] = range.split("-").map(Number);
+        assert.equal(from, next);
+        assert.ok(to >= from && to - from < 250);
+        next = to + 1;
+        const sql = await readFile(step.filePath, "utf8");
+        assert.ok(Buffer.byteLength(JSON.stringify({ query: sql }), "utf8") + 4096 <= 900_000);
+      }
+      assert.equal(next - 1, summary.records);
+    }
     const limits = JSON.parse(await readFile(
       path.join(prepared.root, "receipts", "locality-limits.json"), "utf8"));
     assert.equal(limits.relaciones_sha256,

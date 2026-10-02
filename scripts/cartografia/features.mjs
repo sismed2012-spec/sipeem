@@ -181,7 +181,8 @@ export function normalizeCartographyFeature(
 export function buildFeatureBatches(layer, features, options = {}) {
   if (!LAYERS.has(layer)) throw new Error(`Unsupported cartography layer: ${layer}`);
   const maxRows = options.maxRows ?? 250;
-  const maxBytes = options.maxBytes ?? 4_750_000;
+  // Leave room for Base64 expansion, SQL and the Management API JSON envelope.
+  const maxBytes = options.maxBytes ?? 600_000;
   if (!Number.isSafeInteger(maxRows) || maxRows <= 0 || maxRows > 250) {
     throw new Error("maxRows must be between 1 and 250");
   }
