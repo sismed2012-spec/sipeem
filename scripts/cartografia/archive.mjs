@@ -212,8 +212,16 @@ export async function inventoryLayer(root, product, layer, { explicitEncoding } 
   const dbfBytes = await readFile(files.get("dbf"));
   const shp = inspectShpHeader(shpBytes);
   const dbf = parseDbfHeader(dbfBytes);
-  if (shp.records !== dbf.records) {
-    throw new Error(`${product} ${layer} SHP/DBF record counts differ`);
+  const shxBytes = await readFile(files.get("shx"));
+  if (shxBytes.length < 100 || (shxBytes.length - 100) % 8 !== 0 ||
+      shxBytes.readInt32BE(0) !== 9994 || shxBytes.readInt32LE(28) !== 1000 ||
+      shxBytes.readInt32BE(24) * 2 !== shxBytes.length ||
+      shxBytes.readInt32LE(32) !== shp.sourceShapeType) {
+    throw new Error(`${product} ${layer} SHX header is invalid`);
+  }
+  const shxRecords = (shxBytes.length - 100) / 8;
+  if (shp.records !== dbf.records || shxRecords !== dbf.records) {
+    throw new Error(`${product} ${layer} SHP/SHX/DBF record counts differ`);
   }
   const cpg = files.has("cpg") ? (await readFile(files.get("cpg"), "utf8")).trim() : null;
   const encoding = resolveDbfEncoding({ layer, cpg, explicitEncoding });
@@ -228,7 +236,7 @@ export async function inventoryLayer(root, product, layer, { explicitEncoding } 
       path: file,
       bytes: bytes.length,
       sha256: hashBuffer(bytes),
-      declaredRecords: extension === "shp" || extension === "dbf" ? dbf.records : null,
+      declaredRecords: ["shp", "shx", "dbf"].includes(extension) ? dbf.records : null,
     });
   }
   return {

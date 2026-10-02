@@ -46,7 +46,9 @@ describe("cartography archive inspection", () => {
       shp.writeInt32LE(5, 32);
       await writeFile(path.join(root, "COLONIA.dbf"), dbf);
       await writeFile(path.join(root, "COLONIA.shp"), shp);
-      await writeFile(path.join(root, "COLONIA.shx"), Buffer.from("index"));
+      const shx = Buffer.from(shp);
+      shx.writeInt32BE(50, 24);
+      await writeFile(path.join(root, "COLONIA.shx"), shx);
       await writeFile(path.join(root, "COLONIA.prj"), Buffer.from("WGS_1984_UTM_Zone_14N"));
 
       const item = await inventoryLayer(root, "BGD", "COLONIA", {
@@ -59,6 +61,19 @@ describe("cartography archive inspection", () => {
       assert.equal(item.ldid, 0x57);
       assert.equal(item.components.length, 4);
       assert.ok(item.components.every((component) => /^[0-9a-f]{64}$/.test(component.sha256)));
+      assert.equal(item.components.find((component) => component.extension === "shx").declaredRecords, 0);
+      const mismatchedShx = Buffer.concat([shx, Buffer.alloc(8)]);
+      mismatchedShx.writeInt32BE(54, 24);
+      await writeFile(path.join(root, "COLONIA.shx"), mismatchedShx);
+      await assert.rejects(inventoryLayer(root, "BGD", "COLONIA", {
+        explicitEncoding: "Windows-1252",
+      }), /SHP\/SHX\/DBF record counts differ/);
+      for (const malformed of [Buffer.from("index"), Buffer.alloc(100)]) {
+        await writeFile(path.join(root, "COLONIA.shx"), malformed);
+        await assert.rejects(inventoryLayer(root, "BGD", "COLONIA", {
+          explicitEncoding: "Windows-1252",
+        }), /SHX header is invalid/);
+      }
     } finally {
       await rm(root, { recursive: true, force: true });
     }
