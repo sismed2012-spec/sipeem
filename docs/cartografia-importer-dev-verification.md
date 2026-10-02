@@ -63,4 +63,6 @@ Se preparó, sin aplicarlo, un nuevo directorio `ensayo-integral-20261002-replan
 
 Verificación final local: 267 pruebas, 263 aprobadas, cuatro optativas omitidas, cero fallos; ESLint de los archivos cambiados sin errores. El preflight del ejecutor sobre el nuevo artefacto pasó, con 127 pasos previstos y cero ejecutados.
 
+Revisión independiente de la corrección de transporte (`9dc19c1`): sin hallazgos críticos ni importantes. Comprobó los 127 pasos, cero discrepancias de checksum, un máximo de solicitud con margen de 804.501 bytes y ambos journals todavía bloqueados con los mismos tres checksums confirmados. Sus pruebas dirigidas pasaron: 32 aprobadas, dos sondas optativas omitidas, cero fallos. Esta revisión no acepta la carga integral ni implementa la conciliación pendiente.
+
 Pendiente: conciliar expresamente el estado y los rangos del plan nuevo antes de reanudar la carga 1795; ejecutar después las demás capas y la validación controlada. Sin publicación, sin PROD y sin fusión del PR.
