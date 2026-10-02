@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 
 import {
@@ -22,6 +23,13 @@ const manifest = {
 };
 
 describe("cartography SQL artifacts", () => {
+  it("uses the version lookup column declared in the territorial schema", () => {
+    const schema = readFileSync(new URL("../../infra/territorial/supabase/migrations/20260913170926_cartografia_versiones_control.sql", import.meta.url), "utf8");
+    assert.match(schema, /\bclave\s+text\s+not null/i);
+    const sql = buildPublishSql({ versionKey: "INE_2026" });
+    assert.match(sql, /v\.clave = 'INE_2026'/);
+    assert.doesNotMatch(sql, /v\.clave_version/);
+  });
   it("builds a start RPC without interpolating JSON as SQL text", () => {
     const sql = buildStartSql({
       versionKey: "INE-2026'B",
@@ -54,7 +62,7 @@ describe("cartography SQL artifacts", () => {
     assert.match(sql, /rpc_registrar_codificaciones_cartograficas/);
     assert.match(sql, /rpc_registrar_cobertura_colonias/);
     assert.match(sql, /rpc_registrar_cobertura_limites_localidad/);
-    assert.match(sql, /select c\.carga_id[\s\S]+clave_version = 'INE-2026'/);
+    assert.match(sql, /select c\.carga_id[\s\S]+v\.clave = 'INE-2026'/);
   });
 
   it("uses the no-replay RPC and exact contiguous batch bounds", () => {
@@ -69,7 +77,7 @@ describe("cartography SQL artifacts", () => {
     });
     assert.match(sql, /rpc_importar_lote_cartografico_sin_replay/);
     assert.match(sql, /'SECCION',\s*251,\s*500/);
-    assert.match(sql, /clave_version = 'INE-2026'/);
+    assert.match(sql, /v\.clave = 'INE-2026'/);
   });
 
   it("keeps validation and publication as separate one-shot commands", () => {

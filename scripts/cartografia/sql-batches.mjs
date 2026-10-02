@@ -8,11 +8,11 @@ function jsonbBase64(value) {
 }
 
 function versionIdQuery(versionKey) {
-  return `(select v.cartografia_version_id from public.cartografia_versiones v where v.clave_version = ${sqlLiteral(versionKey)})`;
+  return `(select v.cartografia_version_id from public.cartografia_versiones v where v.clave = ${sqlLiteral(versionKey)})`;
 }
 
 function loadIdQuery(versionKey) {
-  return `(select c.carga_id from public.cargas_cartograficas c join public.cartografia_versiones v on v.cartografia_version_id = c.cartografia_version_id where v.clave_version = ${sqlLiteral(versionKey)})`;
+  return `(select c.carga_id from public.cargas_cartograficas c join public.cartografia_versiones v on v.cartografia_version_id = c.cartografia_version_id where v.clave = ${sqlLiteral(versionKey)})`;
 }
 
 function statement(body) {
