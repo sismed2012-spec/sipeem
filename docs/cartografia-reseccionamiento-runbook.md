@@ -49,6 +49,8 @@ El presupuesto predeterminado es 600.000 bytes de JSON de features. Después de 
 
 ## 3. Validar
 
+Puerta pendiente de aceptación del importador: el generador actual llama a `rpc_validar_version_cartografica_lote` directamente. Antes de ejecutar este modo, adaptar y verificar la llamada a `rpc_validar_version_cartografica_paso_exacto`, con fase, cursor y snapshot esperados. No usar el comando siguiente como validación aceptada ni para eludir el checkpoint exacto. La carga integral de ensayo ya comprobada no incluye validación ni publicación.
+
 ```powershell
 npm.cmd run cartografia:validate -- `
   --artifact ".artifacts\cartografia\<artifact_id>" `

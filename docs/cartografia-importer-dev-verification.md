@@ -66,3 +66,33 @@ Verificación final local: 267 pruebas, 263 aprobadas, cuatro optativas omitidas
 Revisión independiente de la corrección de transporte (`9dc19c1`): sin hallazgos críticos ni importantes. Comprobó los 127 pasos, cero discrepancias de checksum, un máximo de solicitud con margen de 804.501 bytes y ambos journals todavía bloqueados con los mismos tres checksums confirmados. Sus pruebas dirigidas pasaron: 32 aprobadas, dos sondas optativas omitidas, cero fallos. Esta revisión no acepta la carga integral ni implementa la conciliación pendiente.
 
 Pendiente: conciliar expresamente el estado y los rangos del plan nuevo antes de reanudar la carga 1795; ejecutar después las demás capas y la validación controlada. Sin publicación, sin PROD y sin fusión del PR.
+
+## Conciliación explícita y reanudación del ensayo — 2026-10-02
+
+La comparación local verificó todos los checksums SQL de ambos planes, continuidad de rangos y tamaño de los archivos nuevos. Los datos de cada una de las ocho capas, concatenados en orden de fila y resumidos con SHA-256, coinciden exactamente entre los planes. También coinciden el manifiesto, los tres archivos de recibos y los checksums de inicio, recibos y ENTIDAD. Sólo cambia la división de los lotes pendientes; quedan 124 pasos nuevos por ejecutar.
+
+El preflight nativo `reconciliation-preflight.sql` se ejecutó una sola vez en READ ONLY y pasó 10/10 comprobaciones el `2026-10-02T19:15:07.834398+00:00`. Confirmó versión aislada 4037 y carga única 1795, cursor ENTIDAD 1, conteos 1/1/0/0, sólo un lote ENTIDAD en el ledger y cero filas en las capas pendientes. No había incidencias ni progreso de validación. Los tres recibos remotos se compararon por igualdad JSON con los archivos locales y coincidieron. La versión publicada 4025 y su snapshot siguen intactos; carga publicada 1793 COMPLETA.
+
+Huellas de la conciliación:
+
+- SQL de lectura: `ab28b3317c5ddbc13f4aca6967fdb47069e649e27b9328106330ced526bdb7c2`.
+- Plan anterior: `712f9ecc1c15d27bcae66834a5266a66f6b1f89a1010f8a1caa3274c0ff7c805`.
+- Plan nuevo: `e90c94b125c63dde8a11e5eca7014edc40b5b371934398c389b2b121c62d02f1`.
+- Journal bloqueado de origen: `59086b4aa844ba06ae1c2ba33753fff5dfd22de5dbad66e96e6087d5c747472f`.
+- Manifiesto local de ambos planes: `08f6d36eb30b0ea69c6c3fd46b1c8aa1d340ae2c6daa396eb214ba79527eb166`.
+
+Decisión operativa: reanudar la misma versión de ensayo con el plan reducido, conservando los tres pasos confirmados. Se añadió exclusivamente al journal nuevo una entrada `READ_ONLY_AUDIT_CONFIRMED_NOT_APPLIED` para el rango MUNICIPIO 1–125 y se levantó su bloqueo después de la auditoría. El journal anterior permanece intacto y bloqueado. No se borraron filas ni evidencias y no se ejecutó nuevamente el SQL anterior que recibió HTTP 413. Esta conciliación es específica del incidente comprobado; no es un desbloqueo genérico de resultados inciertos.
+
+El preflight local posterior pasó: 127 pasos previstos, cero ejecutados y tres checksums por omitir. Se ejecutó una única invocación `--apply` del plan nuevo, exclusivamente en SIPEEM-DEV, sin reintentos automáticos, validación ni publicación. Terminó con código cero: 124 pasos nuevos confirmados, tres omitidos y 127 checksums registrados en total. El último ACK fue LIMITE_LOCALIDAD 1731–1826, con 20.095 recibidos/insertados, cero repetidos y cero rechazados.
+
+El postflight nativo de READ ONLY pasó el `2026-10-02T19:29:29.173107+00:00`. Comprobó los 125 rangos del ledger contra el plan, los conteos por lote y la huella del conjunto ordenado de hashes fuente de cada capa contra los features locales. Volvió a comprobar todos los checksums SQL, los 127 ACK y el journal de origen intacto. Coinciden ENTIDAD 1, MUNICIPIO 125, DISTRITO_LOCAL 45, DISTRITO_FEDERAL 40, SECCION 7.052, COLONIA 7.367, LOCALIDAD 3.639 y LIMITE_LOCALIDAD 1.826.
+
+COLONIA conserva 7.316 polígonos y 51 filas sin geometría. Los límites conservan 1.384 relaciones, 1.327 límites con punto y 499 sin punto; sus dos huellas canónicas coinciden con el recibo aprobado. Los tres hashes de recibos permanecen iguales. No existen incidencias ni progreso de validación para el ensayo.
+
+La versión 4037 y la carga 1795 siguen CARGANDO, sin ser predeterminadas: esto es importación terminada, no validación territorial aprobada. La única versión predeterminada sigue siendo 4025 PUBLICADA, con el mismo snapshot previo y carga 1793 COMPLETA. No hubo publicación, modificaciones de PROD, despliegues manuales ni fusión del PR.
+
+Huellas finales: SQL de postflight `5d967f43c2de985ecfe8572dbf33cb0e06108b18f432b441c21dbbf9fb4089b1`; journal nuevo `b67f1d445f9350296936b6dd2c0ced0d1152ddba1ffafa3fa8116df83c9bb278`. El informe está conservado como `import-postflight-report.json` dentro del artefacto nuevo.
+
+Verificación local renovada: suite de scripts 267 pruebas, 263 aprobadas, cuatro optativas omitidas y cero fallos. La prueba optativa con ambos ZIP reales se ejecutó por separado: 1/1 aprobada, sin consultas ni escrituras remotas.
+
+Siguiente puerta: revisar y adaptar la invocación de validación al checkpoint esperado de `rpc_validar_version_cartografica_paso_exacto` antes de ejecutarla. El SQL generado actualmente llama directamente a `rpc_validar_version_cartografica_lote`; la importación comprobada aquí no acepta ese flujo ni demuestra su protección frente a deriva/replay. Una consulta de catálogo de READ ONLY confirmó las firmas instaladas y que `service_role` tiene EXECUTE en el paso exacto, pero no en la RPC base. La aceptación integral y cualquier publicación siguen pendientes.
