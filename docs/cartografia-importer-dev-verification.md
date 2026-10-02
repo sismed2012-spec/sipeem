@@ -124,3 +124,28 @@ Huellas de esta etapa:
 - Journal después del paso: `34141b732a5065f48000dc8dd1127808d05e1ca405c13d63cf97374833e0bf13`.
 
 Los informes `validation-preflight-report-001.json` y `validation-postflight-report-001.json`, el SQL sellado y `checkpoint-002.json` se conservaron dentro del artefacto replanteado. El segundo checkpoint se preparó a partir del postflight, pero no se ejecutó: antes de usarlo se debe volver a contrastar el estado remoto. El siguiente paso es PADRES, por lotes de hasta 250 secciones, sin repetir el inicio. Quedan pendientes SOLAPES, COBERTURA, CONTEOS y la aceptación integral. No hubo publicación, cambios de PROD, despliegues manuales ni fusión del PR.
+
+## Fase PADRES completa — 2026-10-02
+
+Se continuó el mismo ensayo 4037/carga 1795 exclusivamente en SIPEEM-DEV. El preflight nativo de READ ONLY repitió 14/14 controles el `2026-10-02T20:38:54.93501+00:00`, confirmando PADRES/cursor cero, snapshot intacto, 51 advertencias y ningún error. Las pruebas dirigidas del ejecutor, parser y checkpoint pasaron: 25 aprobadas y una sonda opcional omitida.
+
+Decisión operativa: agrupar únicamente PADRES para continuar el plan aprobado sin pedir autorización por cada lote. No se añadió un bucle a la CLI ni se cambió código de producto: cada lote fue una invocación nativa independiente del comando existente, con SQL exacto sellado y checkpoint contrastado. La orquestación tuvo un límite de 29 lotes para las 7.052 secciones; ningún fallo se reintenta y ningún checkpoint esperado SOLAPES se ejecuta en este bloque.
+
+El primer lote, con `checkpoint-002.json`, procesó 250 secciones y terminó en PADRES/cursor 9359, cero errores y 146 advertencias. Su postflight de READ ONLY confirmó el ACK, datos, ledger, ACL y publicación intactos. De las advertencias, 51 corresponden a COLONIA sin geometría y 95 a pertenencia espacial de SECCION. Las muestras conservadas muestran áreas fuera del padre inferiores al umbral del validador; no se corrigieron geometrías ni se aceptaron advertencias para publicación.
+
+Después se encadenaron 28 invocaciones nativas adicionales, con `checkpoint-003.json` hasta `checkpoint-030.json`. Antes de cada una se contrastó el checkpoint remoto recién observado con el último ACK local confirmado; después de cada una se ejecutó exactamente una consulta de READ ONLY desde el archivo sellado `validation-observe-parents.sql`. Sus resultados se conservaron como `validation-postflight-report-NNN.json`. Se comprobaron fase/cursor, snapshot, conteo acumulado de secciones, contadores del ACK, incidencias, conteos de las ocho capas, ledger, estados de carga/versión, permisos efectivos de las dos RPC y la versión publicada. Diez sondas locales negativas comprobaron que las discrepancias del control operacional son rechazadas antes de ese encadenamiento.
+
+Resultado: 29 lotes PADRES confirmados, 28 de 250 secciones y uno de 52; total 7.052 secciones procesadas, cero errores. El último ACK avanzó a SOLAPES con cursor `{"cartografia_seccion_id":0}`, `completa: false` y 1.659 advertencias. El postflight final, el `2026-10-02T20:53:05.151328+00:00`, confirmó ese estado. Las incidencias se reconcilian exactamente: 51 ADVERTENCIA/GEOMETRIA_NULA_ORIGEN/COLONIA y 1.608 ADVERTENCIA/PERTENENCIA_ESPACIAL_NO_COINCIDE/SECCION. Se conservan para revisión; no equivalen a errores ni a autorización de publicación.
+
+La versión de ensayo permanece CARGANDO y no predeterminada; su carga sigue VALIDANDO. El snapshot conserva `559d9ed48f1a9ca0eaee99bc18938c186def2bf06762bd17ec1b932992ccc7dd`. El ledger mantiene 125 rangos, 20.095 recibidos/insertados y cero repetidos/rechazados. Los ocho conteos fuente permanecen iguales. La única versión predeterminada sigue siendo 4025 PUBLICADA, con snapshot `352f67bb9d36f8d00fe73e0979493ba1e478a4f38365dc7576a75ce954050152` y carga 1793 COMPLETA. La RPC exacta continúa restringida y la base permanece sin EXECUTE para service_role. PostgreSQL observado: 17.6; no se realizaron actualizaciones ni mantenimiento de índices.
+
+La auditoría local de cierre verificó los 30 checksums SQL de validación y sus 30 informes de lectura, la cadena de fase/cursor de todos los ACK, los 29 lotes PADRES y su suma exacta de 7.052. El journal tiene 30 validaciones confirmadas (incluido el inicio anterior), conserva 127 checksums de importación, `review_required: false` y `publication_confirmed: false`. Un intento simulado de repetir `checkpoint-030.json` se rechazó localmente con cero llamadas de transporte y sin alterar el journal. El plan de importación y el journal bloqueado de origen siguen byte a byte intactos.
+
+Huellas de cierre:
+
+- SQL de observación de fase: `6300495dd1e8abeb9eb1483e69ecda0eef0f3525b6cd53cc6ef074137cb4c5dd`.
+- SQL del primer lote PADRES: `19c2d61cfbf95bad0962e401c38bdb8ae827a3cdc939cd257db31cd10780ce9b`.
+- SQL del último lote PADRES: `ecdf22b80d6cc4023280ecbcf20e2771b7c6acd40e38a31dd81f9304766fbda6`.
+- Journal final: `c854352b20aad4dfd74e6d030d2df7c21f4b3e9cbaaa7ec1f731fc03d6dfae52`.
+
+La suite completa de scripts volvió a pasar: 275 pruebas, 271 aprobadas, cuatro integraciones opcionales omitidas y cero fallos. Esta etapa no cambió código de producto ni migraciones. El informe de la agrupación se conservó como `parents-phase-execution-report.json`; `checkpoint-031.json` contiene el siguiente estado SOLAPES/cursor cero y no se ejecutó. Para retomarlo hay que renovar primero el preflight de READ ONLY y contrastarlo con el último ACK, sin repetir PADRES. Quedan pendientes SOLAPES, COBERTURA, CONTEOS y la aceptación integral. Sin publicación, sin PROD, sin despliegues manuales ni fusión del PR.

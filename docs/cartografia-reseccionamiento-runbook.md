@@ -64,6 +64,8 @@ Cada invocación sella un único SQL inmutable `sql/validation-<sha256>.sql` y l
 
 Después de cada paso: leer el ACK, ejecutar un postflight de READ ONLY, comprobar fase/cursor, snapshot, conteos, incidencias y ACL; sólo entonces preparar un checkpoint nuevo si no hay errores ni bloqueo. No hay reintentos automáticos ni un bucle de validación incorporado. La validación no publica ni cambia la versión predeterminada.
 
+El operador puede agrupar invocaciones dentro de una sola fase del plan aprobado. Cada una sigue siendo un comando independiente de un único paso; el postflight recién observado sirve para contrastar el checkpoint siguiente. Fijar de antemano el máximo de lotes según el número de filas pendientes y el límite 250, y detener el grupo al cambiar de fase. Ante un fallo o resultado incierto, conservar la evidencia y el bloqueo; no repetir el comando. Al reanudar después de una interrupción, renovar el preflight remoto y contrastar el journal antes de ejecutar cualquier checkpoint guardado.
+
 La respuesta visible incluye `fase`, `completa`, `errores` y los demás campos devueltos por la RPC. Debe pertenecer a la versión y snapshot seleccionados, respetar el cursor de su fase y demostrar avance. El checkpoint esperado se conserva en el marcador pendiente, en la confirmación y en cualquier fallo. Los errores activan la misma puerta de revisión; `completa: true` con errores no equivale a una versión válida. Una respuesta incierta no se repite: auditar y conciliar.
 
 ## 4. Publicar en DEV
