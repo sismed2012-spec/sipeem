@@ -1,3 +1,5 @@
+import { assertValidationCheckpoint } from "./validation-checkpoint.mjs";
+
 function sqlLiteral(value) {
   return `'${String(value).replaceAll("'", "''")}'`;
 }
@@ -84,12 +86,16 @@ export function buildImportSql({ versionKey, batch }) {
   return sql;
 }
 
-export function buildValidateSql({ versionKey, batchSize = 250 }) {
+export function buildValidateSql({ versionKey, checkpoint, batchSize = 250 }) {
+  assertValidationCheckpoint(checkpoint, versionKey);
   if (!Number.isSafeInteger(batchSize) || batchSize < 1 || batchSize > 250) {
     throw new Error("Validation batch size must be between 1 and 250");
   }
-  return statement(`select public.rpc_validar_version_cartografica_lote(
-  ${versionIdQuery(versionKey)},
+  return statement(`select public.rpc_validar_version_cartografica_paso_exacto(
+  (select v.cartografia_version_id from public.cartografia_versiones v where v.clave = ${sqlLiteral(versionKey)} and v.cartografia_version_id = ${checkpoint.cartografia_version_id} and not v.es_predeterminada),
+  ${sqlLiteral(checkpoint.fase)},
+  ${jsonbBase64(checkpoint.cursor)},
+  ${sqlLiteral(checkpoint.snapshot_sha256)},
   ${batchSize}
 );`);
 }

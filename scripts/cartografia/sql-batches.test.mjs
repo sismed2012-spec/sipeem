@@ -81,11 +81,13 @@ describe("cartography SQL artifacts", () => {
   });
 
   it("keeps validation and publication as separate one-shot commands", () => {
-    const validation = buildValidateSql({ versionKey: "INE-2026", batchSize: 250 });
+    const validation = buildValidateSql({ versionKey: "INE-2026", batchSize: 250,
+      checkpoint: { schema_version: 1, project_ref: "nppvprbfmjbhwheghipa", version_key: "INE-2026",
+        cartografia_version_id: 4037, fase: "SIN_INICIAR", cursor: {}, snapshot_sha256: "a".repeat(64) } });
     const publication = buildPublishSql({ versionKey: "INE-2026" });
-    assert.match(validation, /rpc_validar_version_cartografica_lote/);
+    assert.match(validation, /rpc_validar_version_cartografica_paso_exacto/);
     assert.doesNotMatch(validation, /rpc_publicar_version_cartografica/);
     assert.match(publication, /rpc_publicar_version_cartografica/);
-    assert.doesNotMatch(publication, /rpc_validar_version_cartografica_lote/);
+    assert.doesNotMatch(publication, /rpc_validar_version_cartografica_paso_exacto/);
   });
 });

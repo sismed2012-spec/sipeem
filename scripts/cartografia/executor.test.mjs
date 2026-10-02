@@ -3,6 +3,11 @@ import path from "node:path";
 import { describe, it } from "node:test";
 
 import { executeCartographyPlan } from "./executor.mjs";
+import { buildValidateSql } from "./sql-batches.mjs";
+
+const checkpoint = { schema_version: 1, project_ref: "nppvprbfmjbhwheghipa",
+  version_key: "ENSAYO_TEST", cartografia_version_id: 4025,
+  fase: "SIN_INICIAR", cursor: {}, snapshot_sha256: "a".repeat(64) };
 
 const plan = {
   import: [
@@ -10,7 +15,7 @@ const plan = {
     { id: "batch-1", checksum: "b".repeat(64), filePath: "batch-1.sql" },
     { id: "batch-2", checksum: "c".repeat(64), filePath: "batch-2.sql" },
   ],
-  validate: [{ id: "validate", checksum: "d".repeat(64), filePath: "validate.sql" }],
+  validate: [{ id: "validate", checksum: "d".repeat(64), filePath: "validate.sql", checkpoint }],
   publish: [{ id: "publish", checksum: "e".repeat(64), filePath: "publish.sql" }],
 };
 
@@ -23,7 +28,8 @@ function executionOptions(overrides = {}) {
   return {
     artifactRoot: process.cwd(),
     calculateFileHash: async (filePath) => checksumByFile.get(filePath.split(/[\\/]/).at(-1)),
-    readSql: async () => "select 1;",
+    readSql: async (file) => file.endsWith("validate.sql")
+      ? buildValidateSql({ versionKey: "ENSAYO_TEST", checkpoint }) : "select 1;",
     ...overrides,
   };
 }
@@ -38,7 +44,7 @@ function successfulResult(args) {
     estado_version: "PREPARADA", estado_carga: "PREPARADA" }, "rpc_iniciar_carga_cartografica");
   if (args.at(-1).endsWith("validate.sql")) return rpcResult({ cartografia_version_id: 4025,
     completa: false, fase: "PADRES", errores: 0, procesados: 0, advertencias: 0,
-    cursor: { cartografia_seccion_id: 0 }, snapshot_sha256: "a".repeat(64) }, "rpc_validar_version_cartografica_lote");
+    cursor: { cartografia_seccion_id: 0 }, snapshot_sha256: "a".repeat(64) }, "rpc_validar_version_cartografica_paso_exacto");
   return rpcResult(imported);
 }
 
@@ -199,7 +205,7 @@ describe("safe cartography executor", () => {
       mode: "validate", projectRef: "nppvprbfmjbhwheghipa",
       runCommand: async () => rpcResult({ cartografia_version_id: 4025,
         completa: true, fase: "COMPLETA", errores: 2, procesados: 0, advertencias: 0,
-        cursor: {}, snapshot_sha256: "a".repeat(64) }, "rpc_validar_version_cartografica_lote"),
+        cursor: {}, snapshot_sha256: "a".repeat(64) }, "rpc_validar_version_cartografica_paso_exacto"),
       onBatchConfirmed: async (_batch, result) => { observed = result; },
     })), /REVIEW_REQUIRED.*errores=2/);
     assert.equal(observed.response.completa, true);

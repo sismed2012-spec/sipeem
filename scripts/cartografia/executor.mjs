@@ -9,13 +9,14 @@ import {
 } from "../lista-nominal/supabase-cli.mjs";
 
 import { hashFile } from "./archive.mjs";
-import { assertCartographyTransportBudget } from "./sql-batches.mjs";
+import { assertCartographyTransportBudget, buildValidateSql } from "./sql-batches.mjs";
+import { assertValidationCheckpoint, assertValidationCursor } from "./validation-checkpoint.mjs";
 
 const MODES = new Set(["preflight", "import", "validate", "publish"]);
 
 export function parseCartographyResponse(stdout, mode, batch) {
   const parsed = JSON.parse(stdout);
-  const rpc = mode === "validate" ? "rpc_validar_version_cartografica_lote"
+  const rpc = mode === "validate" ? "rpc_validar_version_cartografica_paso_exacto"
     : mode === "publish" ? "rpc_publicar_version_cartografica"
     : batch.id === "start" ? "rpc_iniciar_carga_cartografica"
     : batch.id === "receipts" ? "rpc_registrar_cobertura_limites_localidad"
@@ -43,17 +44,30 @@ export function parseCartographyResponse(stdout, mode, batch) {
       throw new Error("RPC acknowledgement belongs to another batch");
     }
   } else if (mode === "validate") {
+    assertValidationCheckpoint(batch.checkpoint, batch.checkpoint?.version_key);
     integer("cartografia_version_id", 1);
     integer("errores");
     integer("procesados");
     integer("advertencias");
-    const phases = ["ESTRUCTURA", "PADRES", "SOLAPES", "COBERTURA", "CONTEOS", "COMPLETA"];
+    const phases = ["PADRES", "SOLAPES", "COBERTURA", "CONTEOS", "COMPLETA"];
     if (typeof response.completa !== "boolean" || !phases.includes(response.fase) ||
         response.completa !== (response.fase === "COMPLETA") ||
-        !response.cursor || typeof response.cursor !== "object" || Array.isArray(response.cursor) ||
-        Object.values(response.cursor).some((value) => !Number.isSafeInteger(value) || value < 0) ||
-        (response.snapshot_sha256 !== null && !/^[0-9a-f]{64}$/.test(response.snapshot_sha256 ?? ""))) {
+        response.cartografia_version_id !== batch.checkpoint.cartografia_version_id ||
+        response.snapshot_sha256 !== batch.checkpoint.snapshot_sha256) {
       throw new Error("Invalid validation state");
+    }
+    assertValidationCursor(response.fase, response.cursor);
+    const order = ["SIN_INICIAR", ...phases];
+    const from = order.indexOf(batch.checkpoint.fase);
+    const to = order.indexOf(response.fase);
+    const currentCursor = Object.values(batch.checkpoint.cursor)[0];
+    const nextCursor = Object.values(response.cursor)[0];
+    const advanced = to === from
+      ? Number.isSafeInteger(currentCursor) && nextCursor > currentCursor
+      : to === from + 1 && Object.values(response.cursor).every((value) => value === 0);
+    // A terminal failure is evidence of a committed failed validation, not an unknown ACK.
+    if (!advanced && !(response.completa && response.errores > 0)) {
+      throw new Error("Validation acknowledgement did not advance the expected checkpoint");
     }
   } else if (mode === "publish") integer("version_seleccionada_id", 1);
   else {
@@ -82,6 +96,13 @@ export async function executeCartographyPlan(
   if (!MODES.has(mode)) throw new Error(`Unsupported cartography execution mode: ${mode}`);
   const selected = mode === "preflight" ? plan.import : plan[mode];
   if (!Array.isArray(selected)) throw new Error(`Plan has no ${mode} stage`);
+  if (mode !== "preflight") {
+    assertDevProjectRef(projectRef);
+    if (reviewRequired) throw new Error("REVIEW_REQUIRED: audit the artifact before any further execution");
+  }
+  if (mode === "validate" && selected.length !== 1) {
+    throw new Error("Exactly one validation checkpoint is required");
+  }
   if (typeof artifactRoot !== "string" || !artifactRoot.trim()) {
     throw new Error("Cartography artifact root is required");
   }
@@ -101,15 +122,24 @@ export async function executeCartographyPlan(
     if (actualChecksum !== batch.checksum) {
       throw new Error(`Cartography step ${batch.id} checksum differs from the sealed plan`);
     }
-    assertCartographyTransportBudget(await readSql(resolvedFile));
+    const sql = await readSql(resolvedFile);
+    assertCartographyTransportBudget(sql);
+    if (mode === "validate") {
+      const checkpoint = batch.checkpoint;
+      assertValidationCheckpoint(checkpoint, checkpoint?.version_key);
+      if (sql !== buildValidateSql({ versionKey: checkpoint.version_key, checkpoint })) {
+        throw new Error("SQL does not match the exact validation checkpoint");
+      }
+      if (confirmedChecksums.has(batch.checksum)) {
+        throw new Error("Validation checkpoint already confirmed; do not replay");
+      }
+    }
   }
   const planned = selected.map((batch) => batch.id);
   if (mode === "preflight") {
     return { mode, planned, skipped: [], completed: [] };
   }
 
-  assertDevProjectRef(projectRef);
-  if (reviewRequired) throw new Error("REVIEW_REQUIRED: audit the artifact before any further execution");
   const skipped = [];
   const completed = [];
   const responses = [];

@@ -49,17 +49,22 @@ El presupuesto predeterminado es 600.000 bytes de JSON de features. Después de 
 
 ## 3. Validar
 
-Puerta pendiente de aceptación del importador: el generador actual llama a `rpc_validar_version_cartografica_lote` directamente. Antes de ejecutar este modo, adaptar y verificar la llamada a `rpc_validar_version_cartografica_paso_exacto`, con fase, cursor y snapshot esperados. No usar el comando siguiente como validación aceptada ni para eludir el checkpoint exacto. La carga integral de ensayo ya comprobada no incluye validación ni publicación.
+La preparación local deja `plan.validate` vacío: no puede anticipar un checkpoint remoto. Cada invocación exige un archivo JSON obtenido de una auditoría de READ ONLY en DEV, con `schema_version: 1`, `project_ref`, `version_key`, `cartografia_version_id`, `fase`, `cursor` y `snapshot_sha256`. No inventar IDs, cursor ni huella, y no usar la respuesta local anterior sin contrastarla con el estado remoto.
+
+La fase inicial es `SIN_INICIAR` con cursor `{}` y la huella actual de `snapshot_cartografia_version`. Después se usan la fase, cursor y huella persistidos en `validaciones_cartograficas_progreso`. Los checkpoints admitidos son SIN_INICIAR, PADRES, SOLAPES, COBERTURA y CONTEOS; COMPLETA es terminal y no se ejecuta de nuevo. PADRES/SOLAPES requieren `cartografia_seccion_id`; COBERTURA, `cartografia_municipio_id`; SIN_INICIAR/CONTEOS, cursor vacío.
 
 ```powershell
 npm.cmd run cartografia:validate -- `
   --artifact ".artifacts\cartografia\<artifact_id>" `
-  --project-ref "nppvprbfmjbhwheghipa"
+  --project-ref "nppvprbfmjbhwheghipa" `
+  --checkpoint ".artifacts\cartografia\<artifact_id>\checkpoint-001.json"
 ```
 
-Cada invocación ejecuta un único paso de validación. Repetirlo manualmente sólo después de leer el resultado, hasta que la carga alcance su estado terminal válido. La validación no publica ni cambia la versión predeterminada.
+Cada invocación sella un único SQL inmutable `sql/validation-<sha256>.sql` y llama exclusivamente a `rpc_validar_version_cartografica_paso_exacto`, con lote 250. La versión se busca por clave **e ID esperado**, excluyendo la predeterminada. No se sobrescribe el plan ni el journal de importación. Una validación ya confirmada se rechaza antes de abrir Supabase; un checkpoint que avanzó remotamente se rechaza bajo el lock de la RPC. No ejecutar el antiguo SQL `900-validate-next.sql`: carece de checkpoint exacto y el ejecutor lo rechaza.
 
-La respuesta visible incluye `fase`, `completa`, `errores` y los demás campos devueltos por la RPC. Los errores activan la misma puerta de revisión; `completa: true` con errores no equivale a una versión válida.
+Después de cada paso: leer el ACK, ejecutar un postflight de READ ONLY, comprobar fase/cursor, snapshot, conteos, incidencias y ACL; sólo entonces preparar un checkpoint nuevo si no hay errores ni bloqueo. No hay reintentos automáticos ni un bucle de validación incorporado. La validación no publica ni cambia la versión predeterminada.
+
+La respuesta visible incluye `fase`, `completa`, `errores` y los demás campos devueltos por la RPC. Debe pertenecer a la versión y snapshot seleccionados, respetar el cursor de su fase y demostrar avance. El checkpoint esperado se conserva en el marcador pendiente, en la confirmación y en cualquier fallo. Los errores activan la misma puerta de revisión; `completa: true` con errores no equivale a una versión válida. Una respuesta incierta no se repite: auditar y conciliar.
 
 ## 4. Publicar en DEV
 

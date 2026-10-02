@@ -96,3 +96,31 @@ Huellas finales: SQL de postflight `5d967f43c2de985ecfe8572dbf33cb0e06108b18f432
 Verificación local renovada: suite de scripts 267 pruebas, 263 aprobadas, cuatro optativas omitidas y cero fallos. La prueba optativa con ambos ZIP reales se ejecutó por separado: 1/1 aprobada, sin consultas ni escrituras remotas.
 
 Siguiente puerta: revisar y adaptar la invocación de validación al checkpoint esperado de `rpc_validar_version_cartografica_paso_exacto` antes de ejecutarla. El SQL generado actualmente llama directamente a `rpc_validar_version_cartografica_lote`; la importación comprobada aquí no acepta ese flujo ni demuestra su protección frente a deriva/replay. Una consulta de catálogo de READ ONLY confirmó las firmas instaladas y que `service_role` tiene EXECUTE en el paso exacto, pero no en la RPC base. La aceptación integral y cualquier publicación siguen pendientes.
+
+## Checkpoint exacto e inicio de validación — 2026-10-02
+
+Se sustituyó la invocación directa por un único paso sellado de `rpc_validar_version_cartografica_paso_exacto`. La preparación offline deja la etapa de validación vacía. La CLI exige `--artifact` y `--checkpoint`; comprueba DEV, clave e ID de versión, fase, cursor cerrado y snapshot. El SQL queda identificado por su SHA-256 y no se sobrescribe. El ejecutor compara su contenido con el checkpoint, rechaza planes legacy o con más de un paso y bloquea la repetición de un checksum ya confirmado antes de abrir Supabase.
+
+El ACK debe coincidir con versión y snapshot, tener contadores válidos y demostrar avance compatible de fase/cursor. Los errores terminales se conservan como evidencia confirmada y bloquean la continuación; un ACK desconocido conserva el estado incierto. El checkpoint esperado se registra tanto antes del transporte como en la confirmación o fallo. No se añadió un bucle automático de validación ni reintentos.
+
+Las regresiones iniciales reprodujeron los fallos antes de la corrección. Se añadieron pruebas de esquema cerrado, hash no textual, ACK legacy, falta de avance, salto de fase, SQL distinto del checkpoint, planes múltiples, estado incierto y replay a través de la CLI con archivos reales. Suite renovada: 275 pruebas, 271 aprobadas, cuatro integraciones optativas omitidas, cero fallos. ESLint de los nueve archivos de código/pruebas cambiados pasó. La integración local con ambos ZIP reales volvió a pasar por separado (1/1), sin consultas ni escrituras remotas.
+
+Revisión independiente: cero hallazgos críticos o importantes. El hallazgo menor de documentación se atendió actualizando el runbook con el archivo de checkpoint, sus campos, refresco desde READ ONLY y prohibición del SQL legacy. La revisión no aceptó un bucle completo, concurrencia, publicación ni cambios de PROD; esas áreas no se alteraron.
+
+Se planificó el SQL exacto de inicio mediante una única ejecución nativa de `EXPLAIN (ANALYZE false, FORMAT JSON)` dentro de READ ONLY con rollback. El preflight nativo posterior pasó 10/10 comprobaciones el `2026-10-02T20:22:57.4451+00:00`: ensayo aislado 4037/carga 1795, importación completa, snapshot esperado, cero progreso/incidencias y ACL restringidas. La versión publicada 4025, su snapshot y carga 1793 seguían intactos.
+
+Después se ejecutó **una sola invocación mutante** de `--validate`, con `checkpoint-001.json`: fase esperada SIN_INICIAR, cursor vacío y snapshot `559d9ed48f1a9ca0eaee99bc18938c186def2bf06762bd17ec1b932992ccc7dd`. El ACK confirmó PADRES, cursor `{"cartografia_seccion_id":0}`, cero errores, 51 advertencias, cero secciones procesadas y `completa: false`. Esto inició la validación; no ejecutó el primer lote de parentesco espacial.
+
+El postflight nativo de READ ONLY pasó 14/14 comprobaciones el `2026-10-02T20:26:18.615417+00:00`. La carga 1795 quedó VALIDANDO; la versión 4037 sigue CARGANDO y no predeterminada. Coinciden fase/cursor/snapshot persistidos y los ocho conteos fuente. Las 51 incidencias son exclusivamente ADVERTENCIA/GEOMETRIA_NULA_ORIGEN/COLONIA y corresponden a las 51 filas originales sin geometría. No existen errores. El ledger mantiene 125 rangos y 20.095 recibidos/insertados, sin repetidos ni rechazados. La RPC base sigue sin EXECUTE para service_role y el paso exacto sigue restringido. La única versión predeterminada continúa siendo 4025 PUBLICADA, con snapshot inalterado y carga 1793 COMPLETA.
+
+Una comprobación local posterior intentó el mismo checkpoint usando un transporte simulado prohibido: el ejecutor lo rechazó como ya confirmado y realizó cero llamadas. El journal quedó idéntico durante esta comprobación. Conserva 127 checksums de importación, una validación confirmada, `review_required: false` y `publication_confirmed: false`; el journal bloqueado de origen y el plan de importación permanecen intactos.
+
+Huellas de esta etapa:
+
+- SQL de EXPLAIN: `1a27f199fd427d06036b3f2d5c2098c00ff41d2348409af7e76edc471c8d7d3f`.
+- SQL de preflight: `4b138df26f4788595d1f204004d65e8ec2199d45d957f597f4cb6b277d32d95a`.
+- SQL del paso ejecutado: `fb7926de60252575b3cfbd9d29dca7d87825d078f908ea24999f749083939580`.
+- SQL de postflight: `171248cb3f532cc53e7c98dd29f54a545f4c4558710c074161fca5e6a272bba4`.
+- Journal después del paso: `34141b732a5065f48000dc8dd1127808d05e1ca405c13d63cf97374833e0bf13`.
+
+Los informes `validation-preflight-report-001.json` y `validation-postflight-report-001.json`, el SQL sellado y `checkpoint-002.json` se conservaron dentro del artefacto replanteado. El segundo checkpoint se preparó a partir del postflight, pero no se ejecutó: antes de usarlo se debe volver a contrastar el estado remoto. El siguiente paso es PADRES, por lotes de hasta 250 secciones, sin repetir el inicio. Quedan pendientes SOLAPES, COBERTURA, CONTEOS y la aceptación integral. No hubo publicación, cambios de PROD, despliegues manuales ni fusión del PR.

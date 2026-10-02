@@ -257,12 +257,7 @@ export async function prepareCartographyArtifacts({
       sequence += 1;
     }
   }
-  plan.validate.push(await writeSqlStep(
-    sqlRoot,
-    "900-validate-next.sql",
-    buildValidateSql({ versionKey }),
-    "validate-next",
-  ));
+  // Validation is sealed later from an explicitly observed remote checkpoint.
   plan.publish.push(await writeSqlStep(
     sqlRoot,
     "901-publish.sql",
@@ -295,4 +290,21 @@ export async function prepareCartographyArtifacts({
   } finally {
     await rm(scratchRoot, { recursive: true, force: true });
   }
+}
+
+export async function prepareValidationStep({ artifactRoot, versionKey, checkpoint }) {
+  const sql = buildValidateSql({ versionKey, checkpoint });
+  assertCartographyTransportBudget(sql);
+  const checksum = sha256Text(sql);
+  const filePath = path.join(artifactRoot, "sql", `validation-${checksum}.sql`);
+  await mkdir(path.dirname(filePath), { recursive: true });
+  try {
+    await writeFile(filePath, sql, { encoding: "utf8", flag: "wx" });
+  } catch (error) {
+    if (error.code !== "EEXIST") throw error;
+    if (await hashFile(filePath) !== checksum) {
+      throw new Error("Existing validation SQL differs from its sealed checkpoint");
+    }
+  }
+  return { id: `validate-${checksum}`, filePath, checksum, checkpoint };
 }

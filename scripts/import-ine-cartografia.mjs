@@ -3,8 +3,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { executeCartographyPlan } from "./cartografia/executor.mjs";
-import { prepareCartographyArtifacts } from "./cartografia/prepare.mjs";
+import { prepareCartographyArtifacts, prepareValidationStep } from "./cartografia/prepare.mjs";
 import { loadExecutionState, saveExecutionState } from "./cartografia/state.mjs";
+import { assertDevProjectRef } from "./lista-nominal/supabase-cli.mjs";
 
 function parseArgs(argv) {
   const result = { mode: "preflight" };
@@ -24,11 +25,14 @@ function parseArgs(argv) {
       else if (item === "--expected-date") result.expectedPublicationDate = value;
       else if (item === "--artifact") result.artifactRoot = path.resolve(value);
       else if (item === "--project-ref") result.projectRef = value;
+      else if (item === "--checkpoint") result.checkpointPath = path.resolve(value);
       else throw new Error(`Unknown option: ${item}`);
     } else throw new Error(`Unexpected argument: ${item}`);
   }
   const modes = argv.filter((item) => ["--apply", "--validate", "--publish"].includes(item));
   if (modes.length > 1) throw new Error("Choose only one of --apply, --validate or --publish");
+  if (result.checkpointPath && result.mode !== "validate") throw new Error("--checkpoint requires --validate");
+  if (result.mode === "validate" && !result.artifactRoot) throw new Error("--validate requires --artifact and --checkpoint");
   return result;
 }
 
@@ -73,7 +77,19 @@ export async function main(argv = process.argv.slice(2), { runCommand, log = con
     throw new Error(preflight.database_compatibility.reason);
   }
   const state = await loadExecutionState(artifactRoot);
-  const confirmed = new Set(args.mode === "validate" ? [] : state.confirmed_checksums);
+  if (args.mode !== "preflight") {
+    assertDevProjectRef(args.projectRef);
+    if (state.review_required) throw new Error("REVIEW_REQUIRED: audit the artifact before any further execution");
+  }
+  if (args.mode === "validate") {
+    if (!args.checkpointPath) throw new Error("--checkpoint is required for exact validation");
+    const checkpoint = await readJson(args.checkpointPath);
+    const step = await prepareValidationStep({ artifactRoot, versionKey: preflight.version?.clave, checkpoint });
+    plan = { ...plan, validate: [step] };
+  }
+  const confirmed = new Set(args.mode === "validate"
+    ? state.responses.filter((r) => r.mode === "validate" && r.committed === true).map((r) => r.checksum)
+    : state.confirmed_checksums);
   const result = await executeCartographyPlan(plan, {
     mode: args.mode,
     projectRef: args.projectRef,
@@ -84,13 +100,14 @@ export async function main(argv = process.argv.slice(2), { runCommand, log = con
     onBatchStarted: async (batch) => {
       state.review_required = true;
       state.responses.push({ id: batch.id, checksum: batch.checksum, mode: args.mode,
-        committed: null, reason: "EXECUTION_STARTED", observed_at: new Date().toISOString() });
+        committed: null, reason: "EXECUTION_STARTED", checkpoint: batch.checkpoint,
+        observed_at: new Date().toISOString() });
       await saveExecutionState(artifactRoot, state);
     },
     onBatchBlocked: async (batch, observed) => {
       state.review_required = true;
       state.responses.push({ id: batch.id, checksum: batch.checksum, mode: args.mode,
-        committed: null, reason: observed.reason, stdout: observed.stdout,
+        committed: null, reason: observed.reason, stdout: observed.stdout, checkpoint: batch.checkpoint,
         observed_at: new Date().toISOString() });
       await saveExecutionState(artifactRoot, state);
     },
@@ -104,7 +121,8 @@ export async function main(argv = process.argv.slice(2), { runCommand, log = con
       }
       state.review_required = observed.review_required;
       state.responses.push({ id: batch.id, checksum: batch.checksum, mode: args.mode,
-        committed: true, response: observed.response, observed_at: new Date().toISOString() });
+        committed: true, response: observed.response, checkpoint: batch.checkpoint,
+        observed_at: new Date().toISOString() });
       await saveExecutionState(artifactRoot, state);
       log(JSON.stringify({ step: batch.id, response: observed.response,
         review_required: observed.review_required }));

@@ -25,9 +25,11 @@ test("RPC parsing rejects missing, unsafe, inconsistent and wrong-batch acknowle
 test("validation rejects malformed counters, cursor, hash and contradictory terminal states", () => {
   const valid = { cartografia_version_id: 10, errores: 0, completa: false, fase: "PADRES",
     procesados: 250, advertencias: 0, cursor: { cartografia_seccion_id: 250 }, snapshot_sha256: "a".repeat(64) };
+  const checkpoint = { schema_version: 1, project_ref: DEV_PROJECT_REF, version_key: "TEST",
+    cartografia_version_id: 10, fase: "PADRES", cursor: { cartografia_seccion_id: 0 }, snapshot_sha256: "a".repeat(64) };
   const parse = (value) => parseCartographyResponse(JSON.stringify({ rows: [{
-    rpc_validar_version_cartografica_lote: value,
-  }] }), "validate", { id: "validate-next" });
+    rpc_validar_version_cartografica_paso_exacto: value,
+  }] }), "validate", { id: "validate-next", checkpoint });
   assert.deepEqual(parse(valid), valid);
   for (const delta of [{ fase: "INVALID_PHASE" }, { procesados: "broken" }, { advertencias: -1 },
     { cursor: [] }, { cursor: { cartografia_seccion_id: "250" } },
